@@ -1,0 +1,54 @@
+# Maven
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Eclipse / STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# IntelliJ
+.idea
+*.iws
+*.iml
+*.ipr
+
+# VS Code / Cursor
+.vscode/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Credenciais e configs locais (NAO versionar)
+.env
+.env.local
+.env.*.local
+**/application-local.yml
+**/application-local.properties
+**/application-local.yaml
+
+# Relatorios gerados pelas analises (podem conter trechos do projeto analisado)
+reports/
+
+# Projetos cadastrados pela UI (caminhos locais da maquina)
+data/
+
+# Sonar / analise local
+.scannerwork/
+**/target/sonar/
+
+# Logs e temporarios
+*.log
+*.tmp
+*.swp
+*~

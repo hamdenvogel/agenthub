@@ -1,0 +1,192 @@
+<div class="page">
+  <section class="hero">
+    <span class="eyebrow"><app-icon name="hub" [size]="14" /> Orquestração multiagente</span>
+    <h1>O que você quer analisar no <span class="grad">{{ targets.active()?.name ?? 'projeto' }}</span>?</h1>
+    <p>Descreva o objetivo. O Hub planeja, delega aos agentes especialistas, avalia os resultados e consolida um relatório com evidências.</p>
+  </section>
+
+  @if (targets.active(); as t) {
+    <a routerLink="/targets" class="target-bar" [class.off]="!t.available" title="Trocar projeto ou escopo">
+      <span class="target-icon"><app-icon name="crosshair" [size]="18" /></span>
+      <span class="target-text">
+        <span class="target-line"><strong>{{ t.name }}</strong> <code>{{ t.root }}</code></span>
+        <span class="target-scope">
+          @for (inc of t.includes; track inc) { <span class="tag mono">{{ inc }}</span> } @empty { <span class="tag">Projeto inteiro</span> }
+        </span>
+      </span>
+      <span class="btn btn-sm target-change"><app-icon name="folder-open" [size]="14" /> Trocar</span>
+    </a>
+    @if (!t.available) {
+      <div class="alert alert-danger target-alert"><app-icon name="alert" /><span>{{ t.problem }} — escolha outro projeto em <a routerLink="/targets">Projetos</a>.</span></div>
+    }
+  } @else if (!targets.loading()) {
+    <div class="alert alert-warning target-alert">
+      <app-icon name="alert" />
+      <span>Nenhum projeto ativo. <a routerLink="/targets">Escolha o diretório a analisar</a> antes de iniciar.</span>
+    </div>
+  }
+
+  <section class="composer card">
+    <label for="prompt" class="sr-only">Solicitação</label>
+    <textarea id="prompt" rows="5" [ngModel]="prompt()" (ngModelChange)="prompt.set($event)" (keydown)="onKeydown($event)"
+              [maxlength]="maxLength" placeholder="Ex.: Analise a segurança da autenticação JWT e o tratamento de segredos do backend..."></textarea>
+
+    <div class="composer-tools">
+      <div class="dropdown mru" (focusout)="historyOpen.set(false)" (keydown.escape)="historyOpen.set(false)">
+        <button type="button" class="btn btn-sm" (click)="historyOpen.set(!historyOpen())" [disabled]="!history.items().length"
+                [attr.aria-expanded]="historyOpen()" title="Solicitações usadas recentemente (até 20)">
+          <app-icon name="history" [size]="14" /> Recentes
+          @if (history.items().length) { <span class="count">{{ history.items().length }}</span> }
+          <app-icon name="chevron-down" [size]="13" />
+        </button>
+        @if (historyOpen()) {
+          <div class="dropdown-menu mru-menu" role="menu" (mousedown)="$event.preventDefault()">
+            @for (item of history.items(); track item) {
+              <div class="mru-item">
+                <button type="button" role="menuitem" class="mru-use" [title]="item" (click)="useHistory(item)">{{ item }}</button>
+                <button type="button" class="mru-remove" title="Remover do histórico" aria-label="Remover do histórico"
+                        (click)="history.remove(item)"><app-icon name="x" [size]="14" /></button>
+              </div>
+            }
+            <hr />
+            <button type="button" class="mru-clear" (click)="history.clear(); historyOpen.set(false)">
+              <app-icon name="trash" [size]="14" /> Limpar histórico
+            </button>
+          </div>
+        }
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sm suggest-btn" [disabled]="!canSuggest()" (click)="suggest()"
+              title="A IA sugere solicitações para os agentes selecionados e o projeto ativo">
+        @if (suggesting()) { <span class="spinner"></span> Gerando sugestões... }
+        @else {
+          <app-icon name="wand" [size]="14" />
+          @if (selected().size) { Sugerir prompts para {{ selected().size }} agente(s) } @else { Sugerir prompts com IA }
+        }
+      </button>
+    </div>
+
+    @if (suggestions(); as s) {
+      <div class="suggestions">
+        <div class="suggestions-head">
+          <span class="small"><app-icon name="sparkles" [size]="13" /> Sugestões da IA
+            @if (s.agents.length) { para @for (a of s.agents; track a) { <app-agent-chip [agent]="a" /> } }
+          </span>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-ghost btn-sm" [disabled]="!canSuggest()" (click)="suggest()" title="Gerar outras sugestões">
+            <app-icon name="refresh" [size]="13" /> Gerar outras
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm icon-btn" (click)="suggestions.set(null)" aria-label="Fechar sugestões">
+            <app-icon name="x" [size]="14" />
+          </button>
+        </div>
+        <div class="suggestion-list">
+          @for (item of s.items; track $index) {
+            <button type="button" class="suggestion" [class.on]="prompt() === item.prompt" (click)="useSuggestion(item)">
+              <span class="suggestion-title">
+                <strong>{{ item.title }}</strong>
+                @if (!s.agents.length) { @for (a of item.agents; track a) { <app-agent-chip [agent]="a" /> } }
+              </span>
+              <span class="suggestion-prompt">{{ item.prompt }}</span>
+              @if (item.rationale) { <span class="muted small">{{ item.rationale }}</span> }
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="templates">
+      @for (t of templates; track t.label) {
+        <button type="button" class="chip" (click)="useTemplate(t)"><app-icon name="zap" [size]="13" />{{ t.label }}</button>
+      }
+    </div>
+
+    <div class="agents-head">
+      <div>
+        <h2>Agentes</h2>
+        <p class="muted small">
+          @if (selected().size === 0) {
+            <app-icon name="sparkles" [size]="13" /> Seleção automática: o Planner escolhe os agentes a partir da solicitação.
+          } @else {
+            {{ selected().size }} agente(s) selecionado(s) manualmente.
+          }
+        </p>
+      </div>
+      <div class="agents-actions">
+        <button type="button" class="btn btn-ghost btn-sm" (click)="selectAll(true)">Todos</button>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="selectAll(false)">Automático</button>
+      </div>
+    </div>
+
+    <div class="agents">
+      @for (a of agents(); track a.id) {
+        <button type="button" class="agent" [class.on]="selected().has(a.role)" [style.--c]="a.color"
+                (click)="toggle(a.role)" [attr.aria-pressed]="selected().has(a.role)">
+          <span class="agent-icon"><app-icon [name]="a.icon" /></span>
+          <span class="agent-text">
+            <strong>{{ a.label }}</strong>
+            <small>{{ a.blurb }}</small>
+            @if (a.tools.length) {
+              <span class="agent-tools">
+                @for (t of a.tools; track t.id) {
+                  <span class="tool" [class.off]="!t.available" [title]="t.available ? 'Disponível' : 'Indisponível'">{{ t.id }}</span>
+                }
+              </span>
+            }
+          </span>
+          <span class="check"><app-icon name="check-circle" [size]="18" /></span>
+        </button>
+      }
+    </div>
+
+    <footer class="composer-foot">
+      <span class="muted small counter" [class.over]="length() > maxLength">{{ length() }}/{{ maxLength }}</span>
+      @if (estimate(); as e) {
+        <span class="muted small" title="Ordem de grandeza observada; o custo real depende do escopo e do modelo">
+          <app-icon name="coins" [size]="13" /> ~US$ {{ e.usd.toFixed(2) }} estimado
+        </span>
+      }
+      <span class="spacer"></span>
+      <span class="muted small hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+      <button type="button" class="btn btn-primary btn-lg" [disabled]="!canSubmit()" (click)="submit()">
+        @if (submitting()) { <span class="spinner"></span> Enviando... } @else { <app-icon name="send" [size]="16" /> Analisar }
+      </button>
+    </footer>
+  </section>
+
+  <section class="recent grid-2">
+    <article class="card">
+      <h3 class="card-title"><app-icon name="activity" /> Execuções desta sessão</h3>
+      @for (run of recentRuns(); track run.analysisId) {
+        <a class="row" [routerLink]="['/analysis', run.analysisId]">
+          <app-status-badge [status]="run.status" />
+          <span class="row-text">{{ run.request }}</span>
+          <span class="muted small nowrap">{{ run.createdAt | relativeTime }}</span>
+        </a>
+      } @empty {
+        <p class="muted small">Nenhuma análise desde que o backend foi iniciado.</p>
+      }
+    </article>
+    <article class="card">
+      <h3 class="card-title"><app-icon name="file-text" /> Relatórios recentes</h3>
+      @for (r of recentReports(); track r.reportId) {
+        <a class="row" [routerLink]="['/reports', r.reportId]">
+          <span class="row-main">
+            <span class="row-text">{{ r.request }}</span>
+            <span class="row-meta">
+              @for (a of (r.agents | keyvalue); track a.key) { <app-agent-chip [agent]="a.key" /> }
+              <span class="muted small">{{ r.findings }} achados · {{ r.durationMs | duration }}</span>
+            </span>
+          </span>
+          <span class="row-side">
+            <app-stacked-bar [data]="severity(r)" />
+            <span class="muted small nowrap">{{ r.generatedAt | relativeTime }}</span>
+          </span>
+        </a>
+      } @empty {
+        <p class="muted small">Nenhum relatório gravado ainda.</p>
+      }
+      @if (recentReports().length) { <a routerLink="/history" class="see-all small">Ver histórico completo →</a> }
+    </article>
+  </section>
+</div>

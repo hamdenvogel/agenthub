@@ -1,0 +1,856 @@
+{
+  "generatedAt": "2026-10-06T11:25:23.034133Z",
+  "structuredOutputs": [
+    {
+      "name": "PlanDraft",
+      "usedBy": "Planner",
+      "purpose": "Plano: tarefas por agente, foco e dependências.",
+      "feedsHub": false,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "objective": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "agent": {
+                  "type": "string"
+                },
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "focus": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "objective": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "agent",
+                "dependsOn",
+                "focus",
+                "objective"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "objective",
+          "rationale",
+          "tasks"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "AgentAnalysis",
+      "usedBy": "Agentes especialistas (AbstractClaudeAgent)",
+      "purpose": "Resumo, achados com evidências, recomendações e confiança da área.",
+      "feedsHub": true,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "excerpt": {
+                        "type": "string"
+                      },
+                      "file": {
+                        "type": "string"
+                      },
+                      "lines": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "excerpt",
+                      "file",
+                      "lines"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "recommendation": {
+                  "type": "string"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "CRITICAL",
+                    "HIGH",
+                    "MEDIUM",
+                    "LOW",
+                    "INFO"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "category",
+                "description",
+                "evidence",
+                "recommendation",
+                "severity",
+                "title"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confidence",
+          "findings",
+          "recommendations",
+          "summary"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "SynthesisDraft",
+      "usedBy": "ReportSynthesizer",
+      "purpose": "Sumário executivo, code quality, roadmap e recomendações-chave.",
+      "feedsHub": false,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codeQuality": {
+            "type": "string"
+          },
+          "executiveSummary": {
+            "type": "string"
+          },
+          "keyRecommendations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "roadmap": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "phase": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "CRITICAL",
+                    "HIGH",
+                    "MEDIUM",
+                    "LOW",
+                    "INFO"
+                  ]
+                },
+                "rationale": {
+                  "type": "string"
+                },
+                "relatedFindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "action",
+                "phase",
+                "priority",
+                "rationale",
+                "relatedFindings"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "codeQuality",
+          "executiveSummary",
+          "keyRecommendations",
+          "roadmap"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "FixPlan",
+      "usedBy": "RemediationService",
+      "purpose": "Correção proposta: edições search/replace, arquivos novos, passos manuais e riscos.",
+      "feedsHub": false,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "edits": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "replace": {
+                        "type": "string"
+                      },
+                      "search": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "replace",
+                      "search"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "explanation": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action",
+                "content",
+                "edits",
+                "explanation",
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "manualSteps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "risks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "changes",
+          "confidence",
+          "manualSteps",
+          "risks",
+          "summary"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "toolInputs": [
+    {
+      "id": "code-search",
+      "type": "local",
+      "connection": null,
+      "enabled": true,
+      "available": true,
+      "detail": "Busca de texto/regex no conteudo dos arquivos (fs_search_text, in-process), com arquivo:linha e segredos mascarados.",
+      "agents": [
+        "architecture",
+        "backend",
+        "frontend",
+        "database",
+        "security",
+        "test"
+      ],
+      "tools": [
+        {
+          "name": "fs_search_text",
+          "description": "Procura um texto ou regex (Java) nos arquivos do projeto analisado. Retorna arquivo:linha: conteúdo. Máximo de 80 ocorrências.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Texto ou expressão regular a procurar."
+              },
+              "glob": {
+                "type": "string",
+                "description": "Glob para filtrar arquivos, ex.: '**/*.java' ou 'clientes-app/src/**/*.ts'. Default: todos."
+              },
+              "directory": {
+                "type": "string",
+                "description": "Diretório inicial relativo à raiz. Default '.'."
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "blockedTools": []
+    },
+    {
+      "id": "database",
+      "type": "mcp",
+      "connection": "postgres",
+      "enabled": false,
+      "available": false,
+      "detail": "Desabilitada. Banco do projeto via MCP (ex. servidor MCP de PostgreSQL com usuario read-only). Nao configurado.",
+      "agents": [
+        "database"
+      ],
+      "tools": [],
+      "blockedTools": []
+    },
+    {
+      "id": "filesystem",
+      "type": "mcp",
+      "connection": "filesystem",
+      "enabled": true,
+      "available": true,
+      "detail": "Servidor MCP oficial de filesystem (listar, ler e buscar arquivos por nome; somente leitura, preso ao projeto ativo).",
+      "agents": [
+        "architecture",
+        "backend",
+        "frontend",
+        "database",
+        "security",
+        "test"
+      ],
+      "tools": [
+        {
+          "name": "get_file_info",
+          "description": "Retrieve detailed metadata about a file or directory. Returns comprehensive information including size, creation time, last modified time, permissions, and type. This tool is perfect for understanding file characteristics without reading the actual content. Only works within allowed directories.",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "name": "list_directory",
+          "description": "Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "name": "read_multiple_files",
+          "description": "Read the contents of multiple files simultaneously. This is more efficient than reading files one by one when you need to analyze or compare multiple files. Each file's content is returned with its path as a reference. Failed reads for individual files won't stop the entire operation. Only works within allowed directories.",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "paths": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."
+              }
+            },
+            "required": [
+              "paths"
+            ]
+          }
+        },
+        {
+          "name": "read_text_file",
+          "description": "Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "tail": {
+                "description": "If provided, returns only the last N lines of the file",
+                "type": "number"
+              },
+              "head": {
+                "description": "If provided, returns only the first N lines of the file",
+                "type": "number"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "name": "search_files",
+          "description": "Recursively search for files and directories matching a pattern. The patterns should be glob-style patterns that match paths relative to the working directory. Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. Returns full paths to all matching items. Great for finding files when you don't know their exact location. Only searches within allowed directories.",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "excludePatterns": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "path",
+              "pattern"
+            ]
+          }
+        }
+      ],
+      "blockedTools": [
+        "create_directory",
+        "directory_tree",
+        "edit_file",
+        "list_allowed_directories",
+        "list_directory_with_sizes",
+        "move_file",
+        "read_file",
+        "read_media_file",
+        "write_file"
+      ]
+    },
+    {
+      "id": "filesystem-local",
+      "type": "local",
+      "connection": null,
+      "enabled": true,
+      "available": true,
+      "detail": "Reserva in-process (fs_list_directory, fs_read_file, fs_search_text, fs_find_files) para uso sem Node/npx.",
+      "agents": [],
+      "tools": [
+        {
+          "name": "fs_find_files",
+          "description": "Lista arquivos do projeto analisado que casam com um glob. Máximo de 200 resultados.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "glob": {
+                "type": "string",
+                "description": "Glob, ex.: '**/*Controller.java', '**/*.component.ts', '**/application*.properties'."
+              }
+            },
+            "required": [
+              "glob"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "fs_list_directory",
+          "description": "Lista arquivos e subdiretórios de um diretório do projeto analisado (somente leitura).",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Caminho relativo à raiz do projeto. Use '.' para a raiz."
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "fs_read_file",
+          "description": "Lê um arquivo texto do projeto analisado com números de linha. Valores de segredos aparecem mascarados. Máximo de 400 linhas por chamada; use startLine para paginar.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Caminho relativo à raiz do projeto."
+              },
+              "startLine": {
+                "type": "integer",
+                "description": "Primeira linha (1-based). Default 1."
+              },
+              "maxLines": {
+                "type": "integer",
+                "description": "Quantidade de linhas (máx. 400). Default 400."
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "fs_search_text",
+          "description": "Procura um texto ou regex (Java) nos arquivos do projeto analisado. Retorna arquivo:linha: conteúdo. Máximo de 80 ocorrências.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Texto ou expressão regular a procurar."
+              },
+              "glob": {
+                "type": "string",
+                "description": "Glob para filtrar arquivos, ex.: '**/*.java' ou 'clientes-app/src/**/*.ts'. Default: todos."
+              },
+              "directory": {
+                "type": "string",
+                "description": "Diretório inicial relativo à raiz. Default '.'."
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "blockedTools": []
+    },
+    {
+      "id": "git",
+      "type": "mcp",
+      "connection": "git",
+      "enabled": true,
+      "available": true,
+      "detail": "Servidor MCP oficial mcp-server-git (historico, commits, branches, diffs).",
+      "agents": [
+        "architecture",
+        "backend",
+        "frontend",
+        "database",
+        "security",
+        "test"
+      ],
+      "tools": [
+        {
+          "name": "git_branch",
+          "description": "List Git branches",
+          "inputSchema": {
+            "properties": {
+              "repo_path": {
+                "description": "The path to the Git repository.",
+                "title": "Repo Path",
+                "type": "string"
+              },
+              "branch_type": {
+                "description": "Whether to list local branches ('local'), remote branches ('remote') or all branches('all').",
+                "title": "Branch Type",
+                "type": "string"
+              },
+              "contains": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified",
+                "title": "Contains"
+              },
+              "not_contains": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified",
+                "title": "Not Contains"
+              }
+            },
+            "required": [
+              "repo_path",
+              "branch_type"
+            ],
+            "title": "GitBranch",
+            "type": "object"
+          }
+        },
+        {
+          "name": "git_diff",
+          "description": "Shows differences between branches or commits",
+          "inputSchema": {
+            "properties": {
+              "repo_path": {
+                "title": "Repo Path",
+                "type": "string"
+              },
+              "target": {
+                "title": "Target",
+                "type": "string"
+              },
+              "context_lines": {
+                "default": 3,
+                "title": "Context Lines",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "repo_path",
+              "target"
+            ],
+            "title": "GitDiff",
+            "type": "object"
+          }
+        },
+        {
+          "name": "git_diff_staged",
+          "description": "Shows changes that are staged for commit",
+          "inputSchema": {
+            "properties": {
+              "repo_path": {
+                "title": "Repo Path",
+                "type": "string"
+              },
+              "context_lines": {
+                "default": 3,
+                "title": "Context Lines",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "repo_path"
+            ],
+            "title": "GitDiffStaged",
+            "type": "object"
+          }
+        },
+        {
+          "name": "git_diff_unstaged",
+          "description": "Shows changes in the working directory that are not yet staged",
+          "inputSchema": {
+            "properties": {
+              "repo_path": {
+                "title": "Repo Path",
+                "type": "string"
+              },
+              "context_lines": {
+                "default": 3,
+                "title": "Context Lines",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "repo_path"
+            ],
+            "title": "GitDiffUnstaged",
+            "type": "object"
+          }
+        },
+        {
+          "name": "git_log",
+          "description": "Shows the commit logs",
+          "inputSchema": {
+            "properties": {
+              "repo_path": {
+                "title": "Repo Path",
+                "type": "string"
+              },
+              "max_count": {
+                "default": 10,
+                "title": "Max Count",
+                "type": "integer"
+              },
+              "start_timestamp": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
+                "title": "Start Timestamp"
+              },
+              "end_timestamp": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
+                "title": "End Timestamp"
+              }
+            },
+            "required": [
+              "repo_path"
+            ],
+            "title": "GitLog",
+            "type": "object"
+          }
+        },
+        {
+          "name": "git_show",
+          "description": "Shows the contents of a commit",
+          "inputSchema": {
+            "properties": {
+              "repo_path": {
+                "title": "Repo Path",
+                "type": "string"
+              },
+              "revision": {
+                "title": "Revision",
+                "type": "string"
+              }
+            },
+            "required": [
+              "repo_path",
+              "revision"
+            ],
+            "title": "GitShow",
+            "type": "object"
+          }
+        },
+        {
+          "name": "git_status",
+          "description": "Shows the working tree status",
+          "inputSchema": {
+            "properties": {
+              "repo_path": {
+                "title": "Repo Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "repo_path"
+            ],
+            "title": "GitStatus",
+            "type": "object"
+          }
+        }
+      ],
+      "blockedTools": [
+        "git_add",
+        "git_checkout",
+        "git_commit",
+        "git_create_branch",
+        "git_reset"
+      ]
+    },
+    {
+      "id": "sonarqube",
+      "type": "mcp",
+      "connection": "sonarqube",
+      "enabled": false,
+      "available": false,
+      "detail": "Desabilitada. SonarQube via MCP (ex. imagem Docker mcp/sonarqube com SONARQUBE_TOKEN). Nao configurado.",
+      "agents": [
+        "architecture",
+        "backend",
+        "frontend",
+        "security"
+      ],
+      "tools": [],
+      "blockedTools": []
+    }
+  ]
+}

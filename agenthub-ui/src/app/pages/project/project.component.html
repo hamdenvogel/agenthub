@@ -1,0 +1,136 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Discovery &amp; agentes</h1>
+      <p>Discovery determinístico do projeto ativo (sem custo de LLM) e ferramentas disponíveis para cada agente.
+        <a routerLink="/targets">Trocar projeto</a></p>
+    </div>
+    <button type="button" class="btn" (click)="load()" [disabled]="loading()"><app-icon name="refresh" [size]="16" /> Atualizar</button>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-danger"><app-icon name="alert" /><div>{{ error() }}</div></div>
+  }
+
+  @if (project(); as p) {
+    @if (p.scope.length) {
+      <div class="alert alert-info scope-alert">
+        <app-icon name="crosshair" />
+        <span>Escopo ativo: @for (s of p.scope; track s) { <code>{{ s }}</code>&nbsp; } — o discovery e os agentes consideram só esses caminhos.</span>
+      </div>
+    }
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-icon" style="--c: var(--accent)"><app-icon name="folder" /></span>
+        <div><span class="kpi-value">{{ p.name }}</span><span class="kpi-label mono" [title]="p.root">{{ p.root }}</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c: #06b6d4"><app-icon name="file-text" /></span>
+        <div><span class="kpi-value">{{ p.totalFiles }}</span><span class="kpi-label">Arquivos indexados</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c: #3b82f6"><app-icon name="server" /></span>
+        <div><span class="kpi-value">{{ p.backendModules.length }}</span><span class="kpi-label">Módulos backend</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c: #10b981"><app-icon name="monitor" /></span>
+        <div><span class="kpi-value">{{ p.frontendModules.length }}</span><span class="kpi-label">Módulos frontend</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c: #f97316"><app-icon name="git" /></span>
+        <div><span class="kpi-value">{{ p.gitRepositories.length }}</span><span class="kpi-label">Repositórios git</span></div></div>
+    </div>
+
+    <div class="grid-2 modules">
+      @for (m of p.backendModules; track m.path) {
+        <article class="card module" style="--c: #3b82f6">
+          <header><span class="module-icon"><app-icon name="server" /></span>
+            <div><h3>{{ m.path }}</h3><span class="muted small">{{ m.buildTool }} · {{ m.artifactId }}</span></div></header>
+          <div class="versions">
+            <span class="version"><small>Java</small><strong>{{ m.javaVersion ?? '—' }}</strong></span>
+            <span class="version"><small>Spring Boot</small><strong>{{ m.springBootVersion ?? '—' }}</strong></span>
+            <span class="version"><small>Dependências</small><strong>{{ m.dependencies.length }}</strong></span>
+          </div>
+          <div class="artifacts">
+            @for (a of artifacts(m.artifacts); track a.label) { <span class="tag">{{ a.label }} <strong>{{ a.count }}</strong></span> }
+          </div>
+        </article>
+      }
+      @for (m of p.frontendModules; track m.path) {
+        <article class="card module" style="--c: #10b981">
+          <header><span class="module-icon"><app-icon name="monitor" /></span>
+            <div><h3>{{ m.path }}</h3><span class="muted small">{{ m.packageManager }} · estado: {{ m.stateManagement ?? 'none' }}</span></div></header>
+          <div class="versions">
+            <span class="version"><small>Angular</small><strong>{{ m.angularVersion ?? '—' }}</strong></span>
+            <span class="version"><small>TypeScript</small><strong>{{ m.typescriptVersion ?? '—' }}</strong></span>
+            <span class="version"><small>RxJS</small><strong>{{ m.rxjsVersion ?? '—' }}</strong></span>
+            <span class="version"><small>Signals</small><strong>{{ m.usesSignals ? 'sim' : 'não' }}</strong></span>
+          </div>
+          <div class="artifacts">
+            @for (a of artifacts(m.artifacts); track a.label) { <span class="tag">{{ a.label }} <strong>{{ a.count }}</strong></span> }
+          </div>
+        </article>
+      }
+    </div>
+
+    <article class="card">
+      <h3 class="card-title"><app-icon name="layers" /> Infraestrutura detectada</h3>
+      <div class="infra">
+        @for (g of infra(); track g.label) {
+          <div class="infra-group" [class.empty]="!g.items.length">
+            <span class="infra-label"><app-icon [name]="g.icon" [size]="14" /> {{ g.label }}</span>
+            @for (item of g.items; track $index) { <span class="infra-item">{{ item }}</span> }
+            @empty { <span class="muted small">não detectado</span> }
+          </div>
+        }
+      </div>
+    </article>
+  } @else if (loading()) {
+    <div class="skeleton" style="height: 90px; margin-bottom: 16px"></div>
+    <div class="skeleton" style="height: 260px"></div>
+  }
+
+  @if (overview(); as o) {
+    <h2 class="section-title">Fontes de ferramentas (MCP e locais)</h2>
+    <div class="sources">
+      @for (s of o.toolSources; track s.id) {
+        <article class="card source" [class.off]="!s.available">
+          <header>
+            <span class="status-dot" [class.ok]="s.available"></span>
+            <h3>{{ s.id }}</h3>
+            <span class="tag">{{ s.type === 'mcp' ? 'MCP' : 'local' }}</span>
+            @if (!s.enabled) { <span class="badge tone-neutral">desabilitada</span> }
+            @else if (s.available) { <span class="badge tone-success">disponível</span> }
+            @else { <span class="badge tone-danger">indisponível</span> }
+          </header>
+          <p class="muted small">{{ s.detail }}</p>
+          @if (s.tools.length) {
+            <div class="tools">@for (t of s.tools; track t) { <code>{{ t }}</code> }</div>
+          }
+        </article>
+      }
+    </div>
+
+    <h2 class="section-title"><app-icon name="lock" /> Matriz de acesso (least privilege)</h2>
+    <article class="card">
+      <div class="table-wrap">
+        <table class="table matrix">
+          <thead>
+            <tr><th>Agente</th>@for (s of matrix().sources; track s) { <th class="center">{{ s }}</th> }</tr>
+          </thead>
+          <tbody>
+            @for (row of matrix().rows; track row.id) {
+              <tr>
+                <td>
+                  @if (agentMeta(row.id); as m) {
+                    <span class="agent-cell" [style.--c]="m.color"><app-icon [name]="m.icon" [size]="16" /> {{ m.label }}</span>
+                  } @else { {{ row.name }} }
+                </td>
+                @for (s of matrix().sources; track s) {
+                  <td class="center">
+                    @if (row.access[s]) {
+                      <span class="access" [class.ok]="sourceAvailable(s)" [title]="sourceAvailable(s) ? 'Permitido e disponível' : 'Permitido, fonte indisponível'">
+                        <app-icon name="check-circle" [size]="16" />
+                      </span>
+                    } @else { <span class="muted">—</span> }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </article>
+  }
+</div>

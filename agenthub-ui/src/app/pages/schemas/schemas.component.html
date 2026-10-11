@@ -1,0 +1,132 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>JSON Schemas</h1>
+      <p>Todos os schemas usados nas chamadas ao Claude, como enviados ao modelo e validados pela aplicação (sem custo de LLM).</p>
+    </div>
+    <div class="head-actions">
+      <button type="button" class="btn" (click)="load()" [disabled]="loading()"><app-icon name="refresh" [size]="16" /> Atualizar</button>
+      <button type="button" class="btn btn-primary" (click)="downloadAll()" [disabled]="!catalog()"><app-icon name="download" [size]="16" /> Baixar tudo (JSON)</button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-danger"><app-icon name="alert" /><div>{{ error() }}</div></div>
+  }
+
+  @if (catalog(); as c) {
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-icon" style="--c:#8b5cf6"><app-icon name="braces" /></span>
+        <div><span class="kpi-value">{{ c.structuredOutputs.length }}</span><span class="kpi-label">Structured Outputs</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c:#3b82f6"><app-icon name="wrench" /></span>
+        <div><span class="kpi-value">{{ toolCount() }}</span><span class="kpi-label">Tool Input Schemas expostos</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c:#10b981"><app-icon name="server" /></span>
+        <div><span class="kpi-value">{{ availableSources() }} / {{ c.toolInputs.length }}</span><span class="kpi-label">Fontes disponíveis</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c:#ef4444"><app-icon name="lock" /></span>
+        <div><span class="kpi-value">{{ blockedCount() }}</span><span class="kpi-label">Ferramentas bloqueadas</span></div></div>
+    </div>
+
+    <label class="search">
+      <app-icon name="search" [size]="16" />
+      <input type="search" placeholder="Filtrar por nome, ferramenta, fonte ou componente..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+    </label>
+
+    <!-- Structured Output -->
+    <section class="block">
+      <h2 class="block-title"><app-icon name="braces" /> Structured Output <span class="muted small">modelo → aplicação (resposta final)</span></h2>
+      <p class="muted small">Gerados dos records Java pelo <code>BeanOutputConverter</code>, anexados ao prompt como instrução de formato e validados na resposta (<code>JsonSchemaValidator</code>).</p>
+      <div class="list">
+        @for (o of outputs(); track o.name) {
+          @let key = 'out:' + o.name;
+          <article class="card schema-card">
+            <div class="schema-head">
+              <button type="button" class="schema-toggle" (click)="toggle(key)" [attr.aria-expanded]="open().has(key)">
+                <app-icon [name]="open().has(key) ? 'chevron-down' : 'chevron-right'" [size]="16" />
+                <code class="schema-name">{{ o.name }}</code>
+              </button>
+              @if (o.feedsHub) { <span class="badge tone-success">Alimenta o Hub</span> }
+              <span class="muted small">{{ o.usedBy }}</span>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="copy(o.schema)"><app-icon name="copy" [size]="14" /> Copiar</button>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="downloadOutput(o)"><app-icon name="download" [size]="14" /> Baixar</button>
+            </div>
+            <p class="purpose">{{ o.purpose }}</p>
+            <div class="params">
+              @for (p of params(o.schema); track p.name) {
+                <span class="param" [class.req]="p.required" [title]="p.required ? 'obrigatório' : 'opcional'"><code>{{ p.name }}</code> <span class="muted">{{ p.type }}</span></span>
+              }
+            </div>
+            @if (open().has(key)) { <pre class="schema-json">{{ pretty(o.schema) }}</pre> }
+          </article>
+        } @empty {
+          <p class="muted">Nenhum Structured Output com esse filtro.</p>
+        }
+      </div>
+    </section>
+
+    <!-- Tool Input Schema -->
+    <section class="block">
+      <h2 class="block-title"><app-icon name="wrench" /> Tool Input Schema <span class="muted small">modelo → ferramenta (argumentos)</span></h2>
+      <p class="muted small">Ferramentas locais: geradas do <code>&#64;Tool</code>/<code>&#64;ToolParam</code>. MCP: publicadas pelo próprio servidor (<code>tools/list</code>).
+        Só as expostas aos agentes aparecem com schema; os argumentos são validados antes de cada execução (<code>GuardedToolCallback</code>).</p>
+      @for (s of sources(); track s.id) {
+        <article class="card source-card">
+          <div class="source-head">
+            <app-icon [name]="s.type === 'mcp' ? 'hub' : 'folder'" [size]="18" />
+            <strong>{{ s.id }}</strong>
+            <span class="tag">{{ s.type }}</span>
+            @if (s.connection) { <span class="tag mono">{{ s.connection }}</span> }
+            @if (!s.enabled) { <span class="badge tone-neutral">Desabilitada</span> }
+            @else if (s.available) { <span class="badge tone-success">Disponível</span> }
+            @else { <span class="badge tone-danger">Indisponível</span> }
+            <span class="spacer"></span>
+            @for (a of s.agents; track a) { <app-agent-chip [agent]="a" /> }
+          </div>
+          @if (s.detail) { <p class="muted small detail">{{ s.detail }}</p> }
+
+          @if (s.tools.length) {
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr><th>Ferramenta</th><th>Descrição</th><th>Parâmetros (* obrigatório)</th><th></th></tr></thead>
+                <tbody>
+                  @for (t of s.tools; track t.name) {
+                    @let key = 'tool:' + s.id + ':' + t.name;
+                    <tr>
+                      <td class="nowrap">
+                        <button type="button" class="schema-toggle" (click)="toggle(key)" [attr.aria-expanded]="open().has(key)">
+                          <app-icon [name]="open().has(key) ? 'chevron-down' : 'chevron-right'" [size]="14" />
+                          <code>{{ t.name }}</code>
+                        </button>
+                      </td>
+                      <td class="desc">{{ t.description }}</td>
+                      <td>
+                        <div class="params">
+                          @for (p of params(t.inputSchema); track p.name) {
+                            <span class="param" [class.req]="p.required"><code>{{ p.name }}{{ p.required ? '*' : '' }}</code> <span class="muted">{{ p.type }}</span></span>
+                          } @empty { <span class="muted small">sem parâmetros</span> }
+                        </div>
+                      </td>
+                      <td class="nowrap actions">
+                        <button type="button" class="btn btn-ghost btn-sm" (click)="copy(t.inputSchema)" title="Copiar schema"><app-icon name="copy" [size]="14" /></button>
+                        <button type="button" class="btn btn-ghost btn-sm" (click)="downloadTool(s, t)" title="Baixar schema"><app-icon name="download" [size]="14" /></button>
+                      </td>
+                    </tr>
+                    @if (open().has(key)) {
+                      <tr class="json-row"><td colspan="4"><pre class="schema-json">{{ pretty(t.inputSchema) }}</pre></td></tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+          @if (s.blockedTools.length) {
+            <p class="blocked small"><app-icon name="lock" [size]="13" /> Publicadas e não expostas (fora da allowlist ou de escrita):
+              @for (b of s.blockedTools; track b) { <code>{{ b }}</code> }</p>
+          }
+        </article>
+      }
+    </section>
+  } @else if (loading()) {
+    <p class="muted">Carregando schemas...</p>
+  }
+</div>

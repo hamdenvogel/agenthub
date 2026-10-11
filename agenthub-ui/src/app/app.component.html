@@ -1,0 +1,112 @@
+<div class="shell" [class.menu-open]="menuOpen()">
+  <aside class="sidebar no-print" aria-label="Navegação principal">
+    <a routerLink="/" class="brand">
+      <span class="brand-logo"><app-icon name="hub" [size]="22" /></span>
+      <span class="brand-text">
+        <strong>AgentHub</strong>
+        <small>Claude · Spring AI · MCP</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      @for (item of nav; track item.path) {
+        <a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: item.exact }" class="nav-link">
+          <app-icon [name]="item.icon" />
+          <span>{{ item.label }}</span>
+        </a>
+      }
+    </nav>
+
+    @if (store.running().length) {
+      <div class="running">
+        <span class="section-label">Em execução</span>
+        @for (run of store.running(); track run.analysisId) {
+          <a [routerLink]="['/analysis', run.analysisId]" class="running-item" [title]="run.request">
+            <span class="spinner"></span>
+            <span class="running-text">{{ run.request }}</span>
+          </a>
+        }
+      </div>
+    }
+
+    <div class="sidebar-foot">
+      <div class="backend" [class]="'backend ' + store.backend()">
+        <span class="status-dot"></span>
+        <span>
+          @switch (store.backend()) {
+            @case ('up') { API conectada }
+            @case ('down') { API indisponível }
+            @default { Conectando... }
+          }
+        </span>
+        <button type="button" class="btn btn-ghost btn-sm icon-btn" (click)="store.refresh()" title="Verificar novamente" aria-label="Verificar conexão">
+          <app-icon name="refresh" [size]="14" />
+        </button>
+      </div>
+      <a routerLink="/targets" class="active-target" [class.off]="targets.active() && !targets.active()!.available"
+         [title]="targets.active()?.root ?? 'Escolher projeto'">
+        <app-icon name="crosshair" [size]="15" />
+        <span class="active-target-text">
+          <small>Projeto ativo</small>
+          <strong>{{ targets.active()?.name ?? 'Nenhum' }}</strong>
+          @if (targets.active()?.includes?.length) {
+            <small>{{ targets.active()!.includes.length }} item(ns) no escopo</small>
+          }
+        </span>
+        <app-icon name="chevron-right" [size]="14" />
+      </a>
+    </div>
+  </aside>
+
+  <div class="backdrop no-print" (click)="menuOpen.set(false)"></div>
+
+  <div class="main">
+    <header class="topbar no-print">
+      <button type="button" class="btn btn-ghost icon-btn menu-btn" (click)="menuOpen.set(!menuOpen())" aria-label="Abrir menu">
+        <app-icon name="menu" />
+      </button>
+      <span class="topbar-title">AgentHub</span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost btn-sm stack-btn" (click)="stackOpen.set(true)" title="Versões da stack (Angular, Java, Node...)">
+        <app-icon name="cpu" [size]="16" /> <span class="stack-label">Stack</span>
+      </button>
+      <button type="button" class="btn btn-ghost icon-btn" (click)="theme.toggle()"
+              [attr.aria-label]="theme.theme() === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'"
+              [title]="theme.theme() === 'dark' ? 'Tema claro' : 'Tema escuro'">
+        <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" />
+      </button>
+    </header>
+
+    @if (store.backend() === 'down') {
+      <div class="page banner-wrap no-print">
+        <div class="alert alert-danger">
+          <app-icon name="alert" />
+          <div>
+            <strong>Backend do AgentHub indisponível.</strong>
+            Inicie a API (porta 8090) com <code>.\mvnw.cmd spring-boot:run</code> na pasta <code>agenthub</code>.
+          </div>
+        </div>
+      </div>
+    }
+
+    <main>
+      <router-outlet />
+    </main>
+  </div>
+</div>
+
+@if (stackOpen()) {
+  <app-stack-info (closed)="stackOpen.set(false)" />
+}
+
+<div class="toasts" aria-live="polite">
+  @for (t of toasts.toasts(); track t.id) {
+    <div class="toast tone-{{ t.tone }}" role="status">
+      <app-icon [name]="t.tone === 'danger' ? 'alert' : t.tone === 'success' ? 'check-circle' : 'info'" />
+      <span>{{ t.message }}</span>
+      <button type="button" class="btn btn-ghost btn-sm icon-btn" (click)="toasts.dismiss(t.id)" aria-label="Fechar">
+        <app-icon name="x" [size]="14" />
+      </button>
+    </div>
+  }
+</div>

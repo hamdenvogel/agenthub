@@ -1,0 +1,14 @@
+.summary { margin-bottom: 16px; }
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;
+  .search { flex: 1 1 320px; }
+}
+.list { padding: 8px 20px; }
+.row-status { width: 110px; flex-shrink: 0; }
+
+@media (max-width: 720px) {
+  .row { flex-wrap: wrap; }
+  .row-status { width: auto; }
+  .row .row-main { flex-basis: 100%; order: 2; }
+  .row .row-side { flex-direction: row; width: auto; align-items: center; margin-left: auto; }
+}

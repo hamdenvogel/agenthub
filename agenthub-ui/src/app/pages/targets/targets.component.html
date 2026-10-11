@@ -1,0 +1,198 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Projetos</h1>
+      <p>Escolha o diretório — ou só alguns pacotes — que os agentes vão analisar. A troca vale para as próximas análises, sem reiniciar.</p>
+    </div>
+    @if (!draft()) {
+      <button type="button" class="btn btn-primary" (click)="newTarget()"><app-icon name="plus" [size]="16" /> Novo projeto</button>
+    }
+  </header>
+
+  @if (store.busy()) {
+    <div class="alert alert-warning gap">
+      <app-icon name="clock" />
+      <span>Há análise em andamento: o projeto ativo só pode ser trocado quando ela terminar (ou for cancelada).</span>
+    </div>
+  }
+  @if (store.error() && !store.overview()) {
+    <div class="alert alert-danger gap"><app-icon name="alert" /><span>Não foi possível carregar os projetos. Verifique o backend.</span></div>
+  }
+
+  <!-- Editor -->
+  @if (draft(); as d) {
+    <section class="card editor" aria-label="Editar projeto">
+      <h2 class="card-title"><app-icon [name]="d.id ? 'edit' : 'plus'" /> {{ d.id ? 'Editar projeto' : 'Novo projeto' }}</h2>
+
+      <div class="form-grid">
+        <div class="field root-field">
+          <label for="t-root">Diretório do projeto</label>
+          <div class="input-group">
+            <input id="t-root" class="input mono" [ngModel]="d.root" (ngModelChange)="patch({ root: $event, includes: [] })"
+                   placeholder="C:\Hamden\Sistemas\...\meu-projeto" autocomplete="off" />
+            <button type="button" class="btn" (click)="browser.set('root')"><app-icon name="folder-open" [size]="16" /> Procurar</button>
+          </div>
+          <span class="hint">Somente leitura. Permitido dentro de: {{ store.overview()?.allowedRoots?.join(', ') }}</span>
+        </div>
+        <div class="field">
+          <label for="t-name">Nome</label>
+          <input id="t-name" class="input" [ngModel]="d.name" (ngModelChange)="patch({ name: $event })" maxlength="80"
+                 placeholder="Nome da pasta, se vazio" autocomplete="off" />
+        </div>
+        <div class="field db-field">
+          <label for="t-db">Banco de dados (PostgreSQL)</label>
+          <input id="t-db" class="input mono" [ngModel]="d.databaseUri" (ngModelChange)="patch({ databaseUri: $event })" maxlength="500"
+                 placeholder="postgresql://usuario:senha@localhost:5432/banco" autocomplete="off" spellcheck="false" />
+          <span class="hint">
+            Usado pelo Database Agent, só para leitura (prefira um usuário só com SELECT). Vazio = projeto sem banco.
+            A senha nunca é exibida: deixe <code>***</code> para mantê-la.
+          </span>
+        </div>
+      </div>
+
+      <div class="scope">
+        <div class="scope-head">
+          <div>
+            <strong>Escopo da análise</strong>
+            <p class="muted small">
+              @if (d.includes.length) {
+                Os agentes só leem os itens abaixo (e os arquivos de build — pom.xml, package.json — das pastas que levam até eles).
+              } @else {
+                Projeto inteiro. Para focar em módulos ou pacotes, adicione pastas ou arquivos.
+              }
+            </p>
+          </div>
+          <button type="button" class="btn btn-sm" [disabled]="!d.root.trim()" (click)="browser.set('scope')">
+            <app-icon name="crosshair" [size]="14" /> {{ d.includes.length ? 'Alterar escopo' : 'Definir escopo' }}
+          </button>
+        </div>
+        @if (d.includes.length) {
+          <div class="chip-group">
+            @for (inc of d.includes; track inc) {
+              <span class="scope-chip mono">
+                <app-icon name="folder" [size]="13" /> {{ inc }}
+                <button type="button" (click)="removeInclude(inc)" [attr.aria-label]="'Remover ' + inc"><app-icon name="x" [size]="12" /></button>
+              </span>
+            }
+          </div>
+        }
+      </div>
+
+      <footer class="editor-foot">
+        <button type="button" class="btn btn-ghost" (click)="draft.set(null)">Cancelar</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" [disabled]="!draftValid() || saving()" (click)="save(false)">Salvar</button>
+        <button type="button" class="btn btn-primary" [disabled]="!draftValid() || saving() || store.busy()" (click)="save(true)"
+                [title]="store.busy() ? 'Aguarde a análise em andamento terminar' : ''">
+          @if (saving()) { <span class="spinner"></span> } @else { <app-icon name="crosshair" [size]="16" /> }
+          Salvar e ativar
+        </button>
+      </footer>
+    </section>
+  }
+
+  <!-- Projeto ativo -->
+  @if (store.active(); as a) {
+    <section class="card active-card" [class.unavailable]="!a.available" aria-label="Projeto ativo">
+      <div class="active-icon"><app-icon name="crosshair" [size]="26" /></div>
+      <div class="active-body">
+        <span class="eyebrow">Projeto ativo</span>
+        <h2>{{ a.name }}</h2>
+        <code class="path">{{ a.root }}</code>
+        <div class="chip-group scope-line">
+          @for (inc of a.includes; track inc) {
+            <span class="tag mono"><app-icon name="folder" [size]="12" /> {{ inc }}</span>
+          } @empty {
+            <span class="tag">Projeto inteiro</span>
+          }
+          <ng-container *ngTemplateOutlet="dbTag; context: { $implicit: a }" />
+        </div>
+        @if (!a.available) {
+          <div class="alert alert-danger compact"><app-icon name="alert" /><span>{{ a.problem }}</span></div>
+        }
+      </div>
+      <div class="active-actions">
+        <a routerLink="/" class="btn btn-primary"><app-icon name="sparkles" [size]="16" /> Nova análise</a>
+        <a routerLink="/diagnostics" class="btn"><app-icon name="gauge" [size]="16" /> Último diagnóstico</a>
+        <a routerLink="/project" class="btn"><app-icon name="layers" [size]="16" /> Discovery</a>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="edit(a)" [disabled]="store.busy()"><app-icon name="edit" [size]="14" /> Editar</button>
+      </div>
+    </section>
+  } @else if (store.loading()) {
+    <div class="skeleton active-skel"></div>
+  }
+
+  <!-- Demais projetos -->
+  <section class="list" aria-label="Projetos salvos">
+    <h3 class="card-title"><app-icon name="folder" /> Projetos salvos <span class="count">{{ store.targets().length }}</span></h3>
+    <div class="targets">
+      @for (t of others(); track t.id) {
+        <article class="card target" [class.unavailable]="!t.available">
+          <header>
+            <span class="t-icon"><app-icon name="folder" /></span>
+            <div class="t-title">
+              <strong>{{ t.name }}</strong>
+              <code class="path" [title]="t.root">{{ t.root }}</code>
+            </div>
+          </header>
+          <div class="chip-group">
+            @for (inc of t.includes; track inc) {
+              <span class="tag mono">{{ inc }}</span>
+            } @empty {
+              <span class="tag">Projeto inteiro</span>
+            }
+            <ng-container *ngTemplateOutlet="dbTag; context: { $implicit: t }" />
+          </div>
+          @if (!t.available) {
+            <p class="problem small"><app-icon name="alert" [size]="13" /> {{ t.problem }}</p>
+          }
+          <footer>
+            <span class="muted small">Atualizado {{ t.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost btn-sm icon-btn" (click)="edit(t)" title="Editar" aria-label="Editar"><app-icon name="edit" [size]="15" /></button>
+            <button type="button" class="btn btn-ghost btn-sm icon-btn danger" (click)="remove(t)" [disabled]="working() === t.id"
+                    title="Remover da lista" aria-label="Remover"><app-icon name="trash" [size]="15" /></button>
+            <button type="button" class="btn btn-sm" (click)="activate(t)" [disabled]="!t.available || store.busy() || working() === t.id">
+              @if (working() === t.id) { <span class="spinner"></span> } @else { <app-icon name="crosshair" [size]="14" /> }
+              Ativar
+            </button>
+          </footer>
+        </article>
+      } @empty {
+        @if (store.targets().length) {
+          <div class="empty-state small-empty">
+            <app-icon name="folder" [size]="26" />
+            <p>Só o projeto ativo está cadastrado. Use <strong>Novo projeto</strong> para alternar entre outros diretórios ou recortes do mesmo projeto.</p>
+          </div>
+        }
+      }
+    </div>
+  </section>
+
+  @if (store.overview(); as o) {
+    <p class="muted small foot-note">
+      <app-icon name="lock" [size]="13" />
+      Acesso somente leitura, restrito a {{ o.allowedRoots.join(', ') }}; arquivos sensíveis (.env, chaves) continuam bloqueados.
+      Lista gravada em <code>{{ o.storeFile }}</code>.
+    </p>
+  }
+</div>
+
+<ng-template #dbTag let-t>
+  @if (t.databaseUri) {
+    <span class="tag mono db-tag" [title]="t.databaseUri"><app-icon name="database" [size]="12" /> {{ dbLabel(t.databaseUri) }}</span>
+  } @else {
+    <span class="tag db-tag none" title="O Database Agent analisa só o código"><app-icon name="database" [size]="12" /> sem banco</span>
+  }
+</ng-template>
+
+@switch (browser()) {
+  @case ('root') {
+    <app-folder-browser mode="root" [start]="draft()?.root || null" [allowedRoots]="store.overview()?.allowedRoots ?? []"
+                        (picked)="onRootPicked($event)" (closed)="browser.set(null)" />
+  }
+  @case ('scope') {
+    <app-folder-browser mode="scope" [start]="draft()!.root" [limit]="draft()!.root" [initialSelection]="scopeSelection()"
+                        (pickedMany)="onScopePicked($event)" (closed)="browser.set(null)" />
+  }
+}

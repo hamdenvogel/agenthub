@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "glob": {
+      "type": "string",
+      "description": "Glob, ex.: '**/*Controller.java', '**/*.component.ts', '**/application*.properties'."
+    }
+  },
+  "required": [
+    "glob"
+  ],
+  "additionalProperties": false
+}

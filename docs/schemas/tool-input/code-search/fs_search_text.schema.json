@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "pattern": {
+      "type": "string",
+      "description": "Texto ou expressão regular a procurar."
+    },
+    "glob": {
+      "type": "string",
+      "description": "Glob para filtrar arquivos, ex.: '**/*.java' ou 'clientes-app/src/**/*.ts'. Default: todos."
+    },
+    "directory": {
+      "type": "string",
+      "description": "Diretório inicial relativo à raiz. Default '.'."
+    }
+  },
+  "required": [
+    "pattern"
+  ],
+  "additionalProperties": false
+}

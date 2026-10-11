@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Caminho relativo à raiz do projeto. Use '.' para a raiz."
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "additionalProperties": false
+}

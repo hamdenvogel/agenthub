@@ -1,0 +1,76 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Histórico</h1>
+      <p>Execuções desta sessão do backend e relatórios gravados em <code>reports/</code>.</p>
+    </div>
+    <button type="button" class="btn" (click)="load()"><app-icon name="refresh" [size]="16" /> Atualizar</button>
+  </header>
+
+  <div class="kpis summary">
+    <div class="kpi"><span class="kpi-icon" style="--c: var(--accent)"><app-icon name="file-text" /></span>
+      <div><span class="kpi-value">{{ totals().reports }}</span><span class="kpi-label">Relatórios</span></div></div>
+    <div class="kpi"><span class="kpi-icon" style="--c: #06b6d4"><app-icon name="list" /></span>
+      <div><span class="kpi-value">{{ totals().findings }}</span><span class="kpi-label">Achados no total</span></div></div>
+    <div class="kpi"><span class="kpi-icon" style="--c: var(--sev-critical)"><app-icon name="alert" /></span>
+      <div><span class="kpi-value">{{ totals().critical }}</span><span class="kpi-label">Críticos + altos</span></div></div>
+    <div class="kpi"><span class="kpi-icon" style="--c: #f59e0b"><app-icon name="clock" /></span>
+      <div><span class="kpi-value">{{ totals().avgDuration | duration }}</span><span class="kpi-label">Duração média</span></div></div>
+  </div>
+
+  <div class="toolbar">
+    <label class="search">
+      <app-icon name="search" [size]="16" />
+      <input type="search" placeholder="Buscar pela solicitação..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+    </label>
+    <select class="select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)" aria-label="Filtrar por status">
+      <option value="">Todos os status</option>
+      <option value="RUNNING">Em execução</option>
+      <option value="COMPLETED">Concluídas</option>
+      <option value="FAILED">Falharam</option>
+      <option value="CANCELLED">Canceladas</option>
+    </select>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-danger"><app-icon name="alert" /><div>{{ error() }}</div></div>
+  }
+
+  <section class="card list">
+    @if (loading() && !rows().length) {
+      @for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 56px; margin: 8px 0"></div> }
+    } @else {
+      @for (row of filtered(); track row.key) {
+        <a class="row" [routerLink]="row.link">
+          <span class="row-status"><app-status-badge [status]="row.status" /></span>
+          <span class="row-main">
+            <span class="row-text">{{ row.request }}</span>
+            <span class="row-meta">
+              @if (row.project) {
+                <span class="tag" [title]="row.scope.length ? 'Escopo: ' + row.scope.join(', ') : 'Projeto inteiro'">
+                  <app-icon name="crosshair" [size]="12" />&nbsp;{{ row.project }}@if (row.scope.length) { &nbsp;· {{ row.scope.length }} no escopo }
+                </span>
+              }
+              @for (a of row.agents; track a) { <app-agent-chip [agent]="a" /> }
+              @if (row.agents.length === 0) { <span class="tag">automático</span> }
+              @if (row.findings !== null) { <span class="muted small">{{ row.findings }} achados</span> }
+              @if (row.durationMs !== null) { <span class="muted small">· {{ row.durationMs | duration }}</span> }
+              @if (!row.persisted) { <span class="muted small">· somente em memória</span> }
+            </span>
+          </span>
+          <span class="row-side">
+            @if (row.severity) { <app-stacked-bar [data]="severity(row)" /> }
+            <span class="muted small nowrap" [title]="row.at | date: 'dd/MM/yyyy HH:mm:ss'">{{ row.at | relativeTime }}</span>
+          </span>
+          <app-icon name="chevron-right" [size]="16" class="muted" />
+        </a>
+      } @empty {
+        <div class="empty-state">
+          <app-icon name="history" [size]="28" />
+          <p>Nenhuma análise encontrada.</p>
+          <a routerLink="/" class="btn btn-primary btn-sm"><app-icon name="sparkles" [size]="14" /> Nova análise</a>
+        </div>
+      }
+    }
+  </section>
+</div>

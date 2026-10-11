@@ -1,0 +1,105 @@
+@if (selection().size) {
+  <div class="selection-bar">
+    <strong>{{ selection().size }} selecionado(s)</strong>
+    @if (selection().size < sorted().length) {
+      <button type="button" class="btn btn-ghost btn-sm" (click)="selectAllFiltered()">Selecionar todos os {{ sorted().length }}</button>
+    }
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-sm" (click)="exportSelected('csv')"><app-icon name="table" [size]="14" /> CSV</button>
+    <button type="button" class="btn btn-sm" (click)="exportSelected('json')"><app-icon name="braces" [size]="14" /> JSON</button>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="clearSelection()">Limpar seleção</button>
+  </div>
+}
+
+<div class="grid-wrap">
+  <table class="table grid">
+    <thead>
+      <tr>
+        <th class="col-check">
+          <input type="checkbox" [checked]="pageAllSelected()" [indeterminate]="pageSomeSelected()" (change)="togglePage()"
+                 [disabled]="!rows().length" aria-label="Selecionar achados desta página" />
+        </th>
+        @for (c of columns; track c.key) {
+          <th [class]="c.cls ?? ''" [attr.aria-sort]="sortKey() === c.key ? (sortAsc() ? 'ascending' : 'descending') : 'none'">
+            <button type="button" class="sort" [class.on]="sortKey() === c.key" (click)="sortBy(c.key)">
+              {{ c.label }}
+              <app-icon [name]="sortKey() === c.key ? (sortAsc() ? 'arrow-up' : 'arrow-down') : 'sort'" [size]="12" />
+            </button>
+          </th>
+        }
+        <th class="col-actions"><span class="sr-only">Ações</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (f of rows(); track f.id) {
+        @let fix = fixes().get(f.id);
+        <tr class="data-row" [class.open]="openId() === f.id" [class.selected]="selection().has(f.id)" (click)="toggleOpen(f.id)"
+            [style.--c]="severityMeta[f.severity].color">
+          <td class="col-check" (click)="$event.stopPropagation()">
+            <input type="checkbox" [checked]="selection().has(f.id)" (change)="toggle(f.id)" [attr.aria-label]="'Selecionar ' + f.id" />
+          </td>
+          <td><app-severity-badge [severity]="f.severity" /></td>
+          <td class="mono nowrap">{{ f.id }}</td>
+          <td class="col-title"><span class="title-text">{{ f.title }}</span></td>
+          <td>@if (f.agent) { <app-agent-chip [agent]="f.agent" /> } @else { <span class="muted">—</span> }</td>
+          <td>@if (f.category) { <span class="tag">{{ f.category }}</span> } @else { <span class="muted">—</span> }</td>
+          <td class="col-file mono" [title]="firstFile(f) ?? ''">{{ shortFile(f) }}</td>
+          <td>@if (fix) { <app-remediation-badge [status]="fix.status" /> } @else { <span class="muted small">—</span> }</td>
+          <td class="col-actions" (click)="$event.stopPropagation()">
+            <button type="button" class="btn btn-sm fix-btn" (click)="resolve.emit(f)" [title]="'Corrigir ' + f.id + ' com IA'">
+              <app-icon name="wand" [size]="14" /> <span>{{ fix?.status === 'READY' ? 'Revisar' : fix?.status === 'APPLIED' ? 'Ver' : 'Corrigir' }}</span>
+            </button>
+          </td>
+        </tr>
+        @if (openId() === f.id) {
+          <tr class="detail-row">
+            <td colspan="9">
+              <div class="detail">
+                @if (f.description) { <p class="prose">{{ f.description }}</p> }
+                @if (f.evidence.length) {
+                  <h4>Evidências</h4>
+                  <ul class="evidence">
+                    @for (e of f.evidence; track $index) {
+                      <li>
+                        <code class="file">{{ e.file }}@if (e.lines) {<span class="lines">:{{ e.lines }}</span>}</code>
+                        @if (e.excerpt?.trim()) { <pre class="excerpt">{{ e.excerpt }}</pre> }
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (f.recommendation) {
+                  <h4>Recomendação</h4>
+                  <p class="prose">{{ f.recommendation }}</p>
+                }
+                <div class="detail-actions">
+                  <button type="button" class="btn btn-primary btn-sm" (click)="resolve.emit(f)"><app-icon name="wand" [size]="14" /> Corrigir com IA</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        }
+      } @empty {
+        <tr><td colspan="9" class="empty"><app-icon name="search" [size]="22" /><p>Nenhum achado com esses filtros.</p></td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+<footer class="pager">
+  <span class="muted small">Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ sorted().length }}</span>
+  <label class="page-size muted small">
+    Por página
+    <select class="select" [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)" aria-label="Itens por página">
+      @for (s of pageSizes; track s) { <option [ngValue]="s">{{ s }}</option> }
+    </select>
+  </label>
+  <nav class="pages" aria-label="Paginação">
+    <button type="button" class="btn btn-sm" (click)="goTo(0)" [disabled]="pageIndex() === 0" aria-label="Primeira página"><app-icon name="chevrons-left" [size]="14" /></button>
+    <button type="button" class="btn btn-sm" (click)="goTo(pageIndex() - 1)" [disabled]="pageIndex() === 0" aria-label="Página anterior"><app-icon name="chevron-left" [size]="14" /></button>
+    @for (n of pageNumbers(); track n) {
+      <button type="button" class="btn btn-sm page-num" [class.current]="n === pageIndex()" (click)="goTo(n)" [attr.aria-current]="n === pageIndex() ? 'page' : null">{{ n + 1 }}</button>
+    }
+    <button type="button" class="btn btn-sm" (click)="goTo(pageIndex() + 1)" [disabled]="pageIndex() >= totalPages() - 1" aria-label="Próxima página"><app-icon name="chevron-right" [size]="14" /></button>
+    <button type="button" class="btn btn-sm" (click)="goTo(totalPages() - 1)" [disabled]="pageIndex() >= totalPages() - 1" aria-label="Última página"><app-icon name="chevrons-right" [size]="14" /></button>
+  </nav>
+</footer>

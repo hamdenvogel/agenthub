@@ -1,0 +1,148 @@
+@let t = totals();
+
+<p class="muted small flow">
+  Cada agente entrega ao Hub o <strong>Structured Output</strong> (<code>AgentAnalysis</code>, validado contra o JSON Schema)
+  convertido em <code>AgentResult</code>. O agrupador remove achados duplicados entre agentes (mesmo título e arquivo,
+  fica o de maior severidade), une as recomendações repetidas e atribui os ids do relatório.
+</p>
+
+<div class="kpis">
+  <div class="kpi"><span class="kpi-icon" style="--c:#3b82f6"><app-icon name="bot" /></span>
+    <div><span class="kpi-value">{{ t.succeeded }} / {{ t.agents }}</span><span class="kpi-label">Agentes com resultado</span></div></div>
+  <div class="kpi"><span class="kpi-icon" style="--c:#ef4444"><app-icon name="list" /></span>
+    <div><span class="kpi-value">{{ t.findingsReceived }} → {{ t.findingsKept }}</span>
+      <span class="kpi-label">Achados recebidos → no relatório ({{ t.findingsMerged }} duplicados)</span></div></div>
+  <div class="kpi"><span class="kpi-icon" style="--c:#10b981"><app-icon name="check" /></span>
+    <div><span class="kpi-value">{{ t.recommendationsReceived }} → {{ t.recommendationsKept }}</span>
+      <span class="kpi-label">Recomendações recebidas → distintas</span></div></div>
+  <div class="kpi"><span class="kpi-icon" style="--c:#f59e0b"><app-icon name="file" /></span>
+    <div><span class="kpi-value">{{ t.evidenceFiles }}</span><span class="kpi-label">Arquivos citados como evidência</span></div></div>
+</div>
+
+<article class="card table-card">
+  <h3 class="card-title"><app-icon name="hub" /> Saída de cada agente para o Hub</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Agente</th><th>Status</th><th class="num">Rodada</th><th>Structured Output</th>
+          <th class="num" title="recebidos / no relatório / duplicados">Achados (rec. / rel. / dup.)</th>
+          <th class="num">Recomendações</th><th class="num">Arquivos</th><th class="num">Confiança</th><th>JSON Schema</th><th></th></tr>
+      </thead>
+      <tbody>
+        @for (a of agents(); track a.agent) {
+          <tr>
+            <td><app-agent-chip [agent]="a.agent" /></td>
+            <td><app-status-badge [status]="a.status" /></td>
+            <td class="num">{{ a.round }}</td>
+            <td>@if (a.outputSchema) { <code>{{ a.outputSchema }}</code> } @else { <span class="muted">—</span> }</td>
+            <td class="num">{{ a.findingsReceived }} / {{ a.findingsKept }} / {{ a.findingsMerged }}</td>
+            <td class="num">{{ a.recommendations }}</td>
+            <td class="num">{{ a.evidenceFiles }}</td>
+            <td class="num">{{ (a.confidence * 100).toFixed(0) }}%</td>
+            <td>
+              @if (!a.outputSchema) { <span class="muted">—</span> }
+              @else if (a.schemaViolations) { <span class="badge tone-warning">{{ a.schemaViolations }} divergência(s)</span> }
+              @else { <span class="badge tone-success">ok</span> }
+            </td>
+            <td class="num">
+              <button type="button" class="btn btn-ghost btn-sm" (click)="showAgent(a.agent)" [title]="'Ver itens de ' + a.name">
+                <app-icon name="search" [size]="14" /> Itens
+              </button>
+            </td>
+          </tr>
+          @if (a.error) { <tr class="error-row"><td colspan="10"><app-icon name="alert" [size]="14" /> {{ a.error }}</td></tr> }
+        }
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<section class="items" aria-label="Itens recebidos pelo Hub">
+  <h3 class="section-title"><app-icon name="layers" /> Itens recebidos pelo Hub</h3>
+
+  <div class="filters">
+    <label class="search">
+      <app-icon name="search" [size]="16" />
+      <input type="search" placeholder="Buscar por título, arquivo, categoria, ID..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+    </label>
+    <select class="select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)" aria-label="Filtrar por tipo">
+      <option value="">Achados e recomendações</option>
+      <option value="FINDING">Só achados</option>
+      <option value="RECOMMENDATION">Só recomendações</option>
+    </select>
+    <select class="select" [ngModel]="agentFilter()" (ngModelChange)="agentFilter.set($event)" aria-label="Filtrar por agente">
+      <option value="">Todos os agentes</option>
+      @for (a of itemAgents(); track a) { <option [value]="a">{{ agentLabel(a) }}</option> }
+    </select>
+    <select class="select" [ngModel]="outcomeFilter()" (ngModelChange)="outcomeFilter.set($event)" aria-label="Filtrar por destino">
+      <option value="">Qualquer destino</option>
+      <option value="KEPT">No relatório</option>
+      <option value="DUPLICATE">Duplicados</option>
+    </select>
+    @if (hasFilters()) { <button type="button" class="btn btn-ghost btn-sm" (click)="clearFilters()">Limpar filtros</button> }
+  </div>
+
+  <div class="grid-wrap">
+    <table class="table grid">
+      <thead>
+        <tr>
+          @for (c of columns; track c.key) {
+            <th [class]="c.cls ?? ''" [attr.aria-sort]="sortKey() === c.key ? (sortAsc() ? 'ascending' : 'descending') : 'none'">
+              <button type="button" class="sort" [class.on]="sortKey() === c.key" (click)="sortBy(c.key)">
+                {{ c.label }}
+                <app-icon [name]="sortKey() === c.key ? (sortAsc() ? 'arrow-up' : 'arrow-down') : 'sort'" [size]="12" />
+              </button>
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (i of rows(); track $index) {
+          <tr class="data-row" [class.dup]="i.outcome === 'DUPLICATE'"
+              [style.--c]="i.severity ? severityMeta[i.severity].color : 'var(--border)'">
+            <td><app-agent-chip [agent]="i.agent" /></td>
+            <td><span class="tag">{{ i.type === 'FINDING' ? 'Achado' : 'Recomendação' }}</span></td>
+            <td>@if (i.severity) { <app-severity-badge [severity]="i.severity" /> } @else { <span class="muted">—</span> }</td>
+            <td class="col-title"><span class="title-text" [title]="i.title">{{ i.title }}</span></td>
+            <td>@if (i.category) { <span class="tag">{{ i.category }}</span> } @else { <span class="muted">—</span> }</td>
+            <td class="col-file mono" [title]="i.file ?? ''">{{ shortFile(i.file) }}</td>
+            <td>
+              @if (i.outcome === 'KEPT') { <span class="badge tone-success">No relatório</span> }
+              @else if (i.type === 'FINDING') { <span class="badge tone-warning">Duplicado</span> }
+              @else { <span class="badge tone-neutral">Repetida</span> }
+            </td>
+            <td class="nowrap">
+              @if (i.findingId) {
+                <button type="button" class="link mono" (click)="openFinding.emit(i.findingId)"
+                        [title]="i.outcome === 'DUPLICATE' ? 'Absorvido por ' + i.findingId : 'Abrir ' + i.findingId">
+                  @if (i.outcome === 'DUPLICATE') { → } {{ i.findingId }}
+                </button>
+              } @else { <span class="muted">—</span> }
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="8" class="empty"><app-icon name="search" [size]="22" /><p>Nenhum item com esses filtros.</p></td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="pager">
+    <span class="muted small">Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ sorted().length }}</span>
+    <label class="page-size muted small">
+      Por página
+      <select class="select" [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)" aria-label="Itens por página">
+        @for (s of pageSizes; track s) { <option [ngValue]="s">{{ s }}</option> }
+      </select>
+    </label>
+    <nav class="pages" aria-label="Paginação">
+      <button type="button" class="btn btn-sm" (click)="goTo(0)" [disabled]="pageIndex() === 0" aria-label="Primeira página"><app-icon name="chevrons-left" [size]="14" /></button>
+      <button type="button" class="btn btn-sm" (click)="goTo(pageIndex() - 1)" [disabled]="pageIndex() === 0" aria-label="Página anterior"><app-icon name="chevron-left" [size]="14" /></button>
+      @for (n of pageNumbers(); track n) {
+        <button type="button" class="btn btn-sm page-num" [class.current]="n === pageIndex()" (click)="goTo(n)" [attr.aria-current]="n === pageIndex() ? 'page' : null">{{ n + 1 }}</button>
+      }
+      <button type="button" class="btn btn-sm" (click)="goTo(pageIndex() + 1)" [disabled]="pageIndex() >= totalPages() - 1" aria-label="Próxima página"><app-icon name="chevron-right" [size]="14" /></button>
+      <button type="button" class="btn btn-sm" (click)="goTo(totalPages() - 1)" [disabled]="pageIndex() >= totalPages() - 1" aria-label="Última página"><app-icon name="chevrons-right" [size]="14" /></button>
+    </nav>
+  </footer>
+</section>

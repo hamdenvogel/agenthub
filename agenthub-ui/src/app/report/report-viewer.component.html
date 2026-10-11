@@ -1,0 +1,463 @@
+@let r = report();
+
+<!-- Barra de abas + exportação -->
+<div class="report-toolbar no-print">
+  <nav class="tabs" role="tablist" aria-label="Seções do relatório">
+    @for (t of tabs; track t.key) {
+      <button type="button" role="tab" class="tab" [class.active]="tab() === t.key" [attr.aria-selected]="tab() === t.key"
+              [attr.aria-label]="t.label" [title]="t.label" (click)="selectTab(t.key)">
+        <app-icon [name]="t.icon" [size]="16" />
+        <span>{{ t.label }}</span>
+        @if (t.key === 'findings') { <span class="tab-count">{{ r.findings.length }}</span> }
+      </button>
+    }
+  </nav>
+
+  <div class="dropdown" (focusout)="exportOpen.set(false)">
+    <button type="button" class="btn btn-primary export-btn" (click)="exportOpen.set(!exportOpen())" [attr.aria-expanded]="exportOpen()"
+            aria-label="Exportar relatório" title="Exportar relatório">
+      <app-icon name="download" [size]="16" /> <span class="export-label">Exportar</span>
+      <app-icon name="chevron-down" [size]="14" class="export-chevron" />
+    </button>
+    @if (exportOpen()) {
+      <div class="dropdown-menu" role="menu" (mousedown)="$event.preventDefault()">
+        <button type="button" role="menuitem" (click)="exportMarkdown()"><app-icon name="file-text" /> Markdown (.md)</button>
+        <button type="button" role="menuitem" (click)="exportJson()"><app-icon name="braces" /> JSON completo</button>
+        <button type="button" role="menuitem" (click)="print()"><app-icon name="printer" /> Imprimir / salvar PDF</button>
+        <hr />
+        <span class="menu-label">Achados</span>
+        <button type="button" role="menuitem" (click)="exportCsv()"><app-icon name="table" /> Todos em CSV (Excel)</button>
+        <button type="button" role="menuitem" (click)="exportFindingsJson()"><app-icon name="braces" /> Todos em JSON</button>
+        @if (hasFilters()) {
+          <button type="button" role="menuitem" (click)="exportCsv(true)"><app-icon name="table" /> Filtrados em CSV ({{ filteredFindings().length }})</button>
+          <button type="button" role="menuitem" (click)="exportFindingsJson(true)"><app-icon name="braces" /> Filtrados em JSON ({{ filteredFindings().length }})</button>
+        }
+        <hr />
+        <button type="button" role="menuitem" (click)="copyMarkdown()"><app-icon name="copy" /> Copiar Markdown</button>
+      </div>
+    }
+  </div>
+</div>
+
+<!-- Cabeçalho visível só na impressão -->
+<header class="print-only print-header">
+  <h1>Relatório AgentHub — {{ r.projectName }}</h1>
+  <p><strong>Solicitação:</strong> {{ r.request }}</p>
+  <p><strong>Gerado em:</strong> {{ r.generatedAt }} · <strong>Análise:</strong> {{ r.analysisId }}</p>
+</header>
+
+@if (meta()?.projectRoot) {
+  <div class="report-target" [title]="meta()!.projectRoot!">
+    <app-icon name="crosshair" [size]="14" />
+    <span class="muted">Projeto</span> <strong>{{ r.projectName }}</strong>
+    <code>{{ meta()!.projectRoot }}</code>
+    @for (inc of meta()!.scope ?? []; track inc) { <span class="tag mono">{{ inc }}</span> } @empty { <span class="tag">Projeto inteiro</span> }
+  </div>
+}
+
+<!-- ============ VISÃO GERAL ============ -->
+@if (tab() === 'overview' || printing()) {
+  <section class="tab-panel" aria-label="Visão geral">
+    <div class="kpis">
+      <div class="kpi">
+        <span class="kpi-icon" style="--c: var(--accent)"><app-icon name="list" /></span>
+        <div><span class="kpi-value">{{ r.findings.length }}</span><span class="kpi-label">Achados</span></div>
+      </div>
+      <div class="kpi clickable" (click)="showSeverity('CRITICAL')" title="Ver achados críticos">
+        <span class="kpi-icon" style="--c: var(--sev-critical)"><app-icon name="alert" /></span>
+        <div><span class="kpi-value">{{ (counts()['CRITICAL'] ?? 0) + (counts()['HIGH'] ?? 0) }}</span><span class="kpi-label">Críticos + altos</span></div>
+      </div>
+      <div class="kpi">
+        <span class="kpi-icon" style="--c: #10b981"><app-icon name="bot" /></span>
+        <div><span class="kpi-value">{{ agentCount() }}</span><span class="kpi-label">Agentes</span></div>
+      </div>
+      <div class="kpi">
+        <span class="kpi-icon" style="--c: #f59e0b"><app-icon name="clock" /></span>
+        <div><span class="kpi-value">{{ meta()?.durationMs | duration }}</span><span class="kpi-label">Duração</span></div>
+      </div>
+      <div class="kpi">
+        <span class="kpi-icon" style="--c: #8b5cf6"><app-icon name="cpu" /></span>
+        <div><span class="kpi-value">{{ inputTokens() + outputTokens() | compact }}</span><span class="kpi-label">Tokens</span></div>
+      </div>
+    </div>
+
+    @if (limitations().length) {
+      <div class="alert alert-warning">
+        <app-icon name="alert" />
+        <div>
+          <strong>Limitações desta execução</strong>
+          <ul>@for (l of limitations(); track $index) { <li>{{ l }}</li> }</ul>
+        </div>
+      </div>
+    }
+
+    <div class="grid-2">
+      <article class="card">
+        <h3 class="card-title"><app-icon name="sparkles" /> Sumário executivo</h3>
+        <p class="prose">{{ r.executiveSummary || 'Sem sumário.' }}</p>
+      </article>
+      <article class="card">
+        <h3 class="card-title"><app-icon name="target" /> Severidade</h3>
+        <app-donut [data]="severityChart()" caption="achados" />
+      </article>
+    </div>
+
+    <div class="grid-2">
+      <article class="card">
+        <h3 class="card-title"><app-icon name="alert" /> Principais riscos</h3>
+        @for (f of topFindings(); track f.id) {
+          <button type="button" class="risk-row" (click)="showFinding(f.id)">
+            <app-severity-badge [severity]="f.severity" />
+            <span class="mono muted">{{ f.id }}</span>
+            <span class="risk-title">{{ f.title }}</span>
+            <app-icon name="chevron-right" [size]="16" class="no-print" />
+          </button>
+        } @empty {
+          <p class="muted">Nenhum achado crítico ou alto.</p>
+        }
+      </article>
+      <article class="card">
+        <h3 class="card-title"><app-icon name="check-circle" /> Recomendações-chave</h3>
+        <ol class="rec-list">
+          @for (rec of r.recommendations; track $index) { <li>{{ rec }}</li> }
+          @empty { <li class="muted">Sem recomendações.</li> }
+        </ol>
+      </article>
+    </div>
+  </section>
+}
+
+<!-- ============ ACHADOS ============ -->
+@if (tab() === 'findings' || printing()) {
+  <section class="tab-panel" aria-label="Achados">
+    @if (printing()) { <h2 class="print-only">Achados</h2> }
+    <div class="filters no-print">
+      <label class="search">
+        <app-icon name="search" [size]="16" />
+        <input type="search" placeholder="Buscar por título, arquivo, categoria, ID..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      </label>
+      <div class="chip-group" role="group" aria-label="Filtrar por severidade">
+        @for (s of severities; track s) {
+          <button type="button" class="chip" [class.on]="severityFilter().has(s)" [style.--c]="severityMeta[s].color"
+                  (click)="toggleSeverity(s)" [disabled]="!counts()[s]">
+            <span class="dot"></span>{{ severityMeta[s].label }} <span class="chip-count">{{ counts()[s] ?? 0 }}</span>
+          </button>
+        }
+      </div>
+      @if (findingAgents().length > 1) {
+        <select class="select" [ngModel]="agentFilter()" (ngModelChange)="agentFilter.set($event)" aria-label="Filtrar por área">
+          <option value="">Todas as áreas</option>
+          @for (a of findingAgents(); track a) { <option [value]="a">{{ agentLabel(a) }}</option> }
+        </select>
+      }
+      @if (findingCategories().length > 1) {
+        <select class="select" [ngModel]="categoryFilter()" (ngModelChange)="categoryFilter.set($event)" aria-label="Filtrar por categoria">
+          <option value="">Todas as categorias</option>
+          @for (c of findingCategories(); track c) { <option [value]="c">{{ c }}</option> }
+        </select>
+      }
+      <select class="select" [ngModel]="fixFilter()" (ngModelChange)="fixFilter.set($event)" aria-label="Filtrar por correção">
+        <option value="">Qualquer correção</option>
+        <option value="none">Sem correção</option>
+        @for (s of fixStatuses; track s[0]) { <option [value]="s[0]">{{ s[1].label }}</option> }
+      </select>
+    </div>
+
+    <div class="list-head no-print">
+      <span class="muted">{{ filteredFindings().length }} de {{ r.findings.length }} achados
+        @if (remediation.appliedCount()) { · <span class="fixed-count">{{ remediation.appliedCount() }} corrigido(s)</span> }</span>
+      <div class="list-actions">
+        <div class="view-toggle" role="group" aria-label="Modo de exibição">
+          <button type="button" [class.on]="view() === 'grid'" (click)="setView('grid')" title="Grade detalhada"><app-icon name="table" [size]="15" /> Grade</button>
+          <button type="button" [class.on]="view() === 'cards'" (click)="setView('cards')" title="Lista expansível"><app-icon name="rows" [size]="15" /> Lista</button>
+        </div>
+        @if (view() === 'cards') {
+          <button type="button" class="btn btn-ghost btn-sm" (click)="expandAll(true)">Expandir todos</button>
+          <button type="button" class="btn btn-ghost btn-sm" (click)="expandAll(false)">Recolher</button>
+        }
+        @if (hasFilters()) { <button type="button" class="btn btn-ghost btn-sm" (click)="clearFilters()">Limpar filtros</button> }
+        <button type="button" class="btn btn-ghost btn-sm" (click)="exportCsv(true)"><app-icon name="table" [size]="14" /> CSV filtrado</button>
+      </div>
+    </div>
+
+    @if (view() === 'grid' && !printing()) {
+      <app-findings-grid class="no-print" [report]="r" [findings]="filteredFindings()" [fixes]="fixes()" (resolve)="resolve($event)" />
+    }
+
+    @if (view() === 'cards' || printing()) {
+    <div class="findings">
+      @for (f of (printing() ? r.findings : filteredFindings()); track f.id) {
+        <article class="finding" [class.open]="expanded().has(f.id) || printing()" [style.--c]="severityMeta[f.severity].color">
+          <button type="button" class="finding-head" (click)="toggleExpanded(f.id)" [attr.aria-expanded]="expanded().has(f.id)">
+            <app-severity-badge [severity]="f.severity" />
+            <span class="mono finding-id">{{ f.id }}</span>
+            <span class="finding-title">{{ f.title }}</span>
+            <span class="finding-tags">
+              @if (fixes().get(f.id); as fix) { <app-remediation-badge [status]="fix.status" /> }
+              @if (f.agent) { <app-agent-chip [agent]="f.agent" /> }
+              @if (f.category) { <span class="tag">{{ f.category }}</span> }
+            </span>
+            <app-icon name="chevron-down" [size]="18" class="chevron no-print" />
+          </button>
+          @if (expanded().has(f.id) || printing()) {
+            <div class="finding-body">
+              <p class="prose">{{ f.description }}</p>
+              @if (f.evidence.length) {
+                <h4>Evidências</h4>
+                <ul class="evidence">
+                  @for (e of f.evidence; track $index) {
+                    <li>
+                      <code class="file">{{ e.file }}@if (e.lines) {<span class="lines">:{{ e.lines }}</span>}</code>
+                      @if (e.excerpt?.trim()) { <pre class="excerpt">{{ e.excerpt }}</pre> }
+                    </li>
+                  }
+                </ul>
+              }
+              @if (f.recommendation) {
+                <div class="recommendation">
+                  <app-icon name="check-circle" [size]="16" />
+                  <div><h4>Recomendação</h4><p class="prose">{{ f.recommendation }}</p></div>
+                </div>
+              }
+              <div class="finding-actions no-print">
+                <button type="button" class="btn btn-primary btn-sm" (click)="resolve(f)">
+                  <app-icon name="wand" [size]="14" /> {{ fixes().get(f.id)?.status === 'READY' ? 'Revisar correção' : fixes().get(f.id)?.status === 'APPLIED' ? 'Ver correção' : 'Corrigir com IA' }}
+                </button>
+              </div>
+            </div>
+          }
+        </article>
+      } @empty {
+        <div class="empty-state">
+          <app-icon name="search" [size]="28" />
+          <p>Nenhum achado com esses filtros.</p>
+        </div>
+      }
+    </div>
+    }
+  </section>
+}
+
+<!-- ============ ÁREAS ============ -->
+@if (tab() === 'areas' || printing()) {
+  <section class="tab-panel" aria-label="Áreas">
+    @if (printing()) { <h2 class="print-only">Áreas analisadas</h2> }
+    <div class="areas">
+      @for (a of (printing() ? analyzedAreas() : areas()); track a.key) {
+        <article class="card area" [class.dim]="!a.section?.analyzed" [style.--c]="a.color">
+          <header class="area-head">
+            <span class="area-icon"><app-icon [name]="a.icon" /></span>
+            <div class="area-name">
+              <h3>{{ a.label }}</h3>
+              @if (a.key !== 'quality') { <app-status-badge [status]="a.section?.analyzed ? (a.section?.status ?? null) : null" /> }
+            </div>
+            @if (a.section?.analyzed && a.section!.confidence > 0) {
+              <div class="confidence" [title]="'Confiança do agente: ' + confidencePct(a.section) + '%'">
+                <span class="conf-value">{{ confidencePct(a.section) }}%</span>
+                <span class="conf-track"><span [style.width.%]="confidencePct(a.section)"></span></span>
+              </div>
+            }
+          </header>
+          @if (a.section?.analyzed) {
+            <p class="prose small">{{ a.section?.summary }}</p>
+            @if (a.section?.findings?.length) {
+              <div class="area-findings">
+                @for (f of a.section!.findings; track f.id) {
+                  <button type="button" class="pill" [style.--c]="severityMeta[f.severity].color" (click)="showFinding(f.id)" [title]="f.title">
+                    <span class="dot"></span>{{ f.id }}
+                  </button>
+                }
+              </div>
+            }
+          } @else {
+            <p class="muted small">Área não analisada nesta execução.</p>
+          }
+        </article>
+      }
+    </div>
+  </section>
+}
+
+<!-- ============ ROADMAP ============ -->
+@if (tab() === 'consolidation' && !printing()) {
+  <section class="tab-panel" aria-label="Consolidação do Hub">
+    @if (r.consolidation; as c) {
+      <app-hub-consolidation [consolidation]="c" (openFinding)="showFinding($event)" />
+    } @else {
+      <div class="alert alert-info"><app-icon name="info" />
+        <div>Consolidação do Hub indisponível neste relatório (gerado antes desta versão do AgentHub). Execute uma nova análise para vê-la.</div>
+      </div>
+    }
+  </section>
+}
+
+@if (tab() === 'roadmap' || printing()) {
+  <section class="tab-panel" aria-label="Roadmap">
+    @if (printing()) { <h2 class="print-only">Roadmap</h2> }
+    @if (roadmapPhases().length) {
+      <ol class="roadmap">
+        @for (p of roadmapPhases(); track p.phase; let i = $index) {
+          <li class="phase">
+            <div class="phase-marker">{{ i + 1 }}</div>
+            <div class="phase-body">
+              <h3>{{ p.phase }}</h3>
+              @for (item of p.items; track $index) {
+                <div class="roadmap-item card">
+                  <div class="roadmap-top">
+                    @if (item.priority) { <app-severity-badge [severity]="item.priority" /> }
+                    <strong>{{ item.action }}</strong>
+                  </div>
+                  @if (item.rationale) { <p class="prose small muted">{{ item.rationale }}</p> }
+                  @if (item.relatedFindings.length) {
+                    <div class="area-findings">
+                      @for (id of item.relatedFindings; track id) {
+                        <button type="button" class="pill" (click)="showFinding(id)">{{ id }}</button>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </li>
+        }
+      </ol>
+    } @else {
+      <div class="empty-state"><app-icon name="map" [size]="28" /><p>Sem roadmap nesta análise.</p></div>
+    }
+  </section>
+}
+
+<!-- ============ DESEMPENHO ============ -->
+@if (tab() === 'performance' || printing()) {
+  <section class="tab-panel" aria-label="Desempenho">
+    @if (printing()) { <h2 class="print-only">Desempenho</h2> }
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-icon" style="--c:#f59e0b"><app-icon name="clock" /></span>
+        <div><span class="kpi-value">{{ meta()?.durationMs | duration }}</span><span class="kpi-label">Duração total</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c:#3b82f6"><app-icon name="refresh" /></span>
+        <div><span class="kpi-value">{{ meta()?.iterations ?? '—' }}</span><span class="kpi-label">Iterações do loop</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c:#8b5cf6"><app-icon name="cpu" /></span>
+        <div><span class="kpi-value">{{ inputTokens() | compact }} / {{ outputTokens() | compact }}</span><span class="kpi-label">Tokens entrada / saída</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c:#10b981"><app-icon name="coins" /></span>
+        <div><span class="kpi-value">US$ {{ cost().toFixed(2) }}</span>
+          <span class="kpi-label" [title]="'Estimativa: US$ ' + pricing.inputPerMillion + '/M entrada, US$ ' + pricing.outputPerMillion + '/M saída'">Custo estimado</span></div></div>
+      <div class="kpi"><span class="kpi-icon" style="--c:#f97316"><app-icon name="wrench" /></span>
+        <div><span class="kpi-value">{{ totalToolCalls() }}</span><span class="kpi-label">Chamadas de ferramentas</span></div></div>
+    </div>
+
+    <p class="muted small sources">
+      Planejamento: <strong>{{ meta()?.plannerSource === 'llm' ? 'Claude' : 'regras' }}</strong> ·
+      Síntese: <strong>{{ meta()?.synthesisSource === 'llm' ? 'Claude' : 'regras' }}</strong>
+      @if (model()) { · Modelo: <strong class="mono">{{ model() }}</strong> }
+    </p>
+
+    @if (metrics().length) {
+      <div class="grid-3">
+        <article class="card"><h3 class="card-title"><app-icon name="clock" /> Duração por agente</h3><app-bars [data]="durationChart()" /></article>
+        <article class="card"><h3 class="card-title"><app-icon name="cpu" /> Tokens por agente</h3><app-bars [data]="tokenChart()" /></article>
+        <article class="card"><h3 class="card-title"><app-icon name="hub" /> Tokens por fase</h3><app-bars [data]="phaseTokenChart()" /></article>
+      </div>
+
+      <div class="grid-2 perf-bottom">
+        <article class="card table-card">
+          <h3 class="card-title"><app-icon name="table" /> Métricas por agente</h3>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>Agente</th><th>Status</th><th class="num">Duração</th><th class="num">LLM</th><th class="num">Tent.</th>
+                  <th class="num">Rodada</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Tools</th>
+                  <th class="num">Achados</th><th class="num">Confiança</th></tr>
+              </thead>
+              <tbody>
+                @for (m of metrics(); track m.agent) {
+                  <tr>
+                    <td><app-agent-chip [agent]="m.agent" /></td>
+                    <td><app-status-badge [status]="m.status" /></td>
+                    <td class="num">{{ m.durationMs | duration }}</td>
+                    <td class="num">{{ m.llmDurationMs | duration }}</td>
+                    <td class="num">{{ m.attempts }}</td>
+                    <td class="num">{{ m.round }}</td>
+                    <td class="num">{{ m.inputTokens | compact }}</td>
+                    <td class="num">{{ m.outputTokens | compact }}</td>
+                    <td class="num">{{ m.toolCalls }}</td>
+                    <td class="num">{{ m.findings }}</td>
+                    <td class="num">{{ (m.confidence * 100).toFixed(0) }}%</td>
+                  </tr>
+                  @if (m.error) { <tr class="error-row"><td colspan="11"><app-icon name="alert" [size]="14" /> {{ m.error }}</td></tr> }
+                }
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article class="card">
+          <h3 class="card-title"><app-icon name="wrench" /> Ferramentas por fonte</h3>
+          @if (toolSourceChart().length) {
+            <app-donut [data]="toolSourceChart()" caption="chamadas" />
+          } @else {
+            <p class="muted">Nenhuma chamada de ferramenta registrada.</p>
+          }
+        </article>
+      </div>
+
+      @if (callLimits().length) {
+        <article class="card table-card limits-card">
+          <h3 class="card-title"><app-icon name="gauge" /> Limites por chamada ao Claude</h3>
+          <p class="muted small limits-legend">
+            <strong>Context window</strong> — quanto cabe (prompts + tool schemas + resultados, estimado) ·
+            <strong>max_tokens</strong> — quanto pode responder ·
+            <strong>JSON Schema</strong> — qual é o formato (argumentos das ferramentas e resposta estruturada)
+          </p>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>Agente</th><th>Context window (pico / orçamento)</th><th class="num">max_tokens</th><th>Parada</th>
+                  <th>Tool Input Schema</th><th>Structured Output</th></tr>
+              </thead>
+              <tbody>
+                @for (m of callLimits(); track m.agent) {
+                  @let pct = contextPercent(m);
+                  <tr>
+                    <td><app-agent-chip [agent]="m.agent" /></td>
+                    <td>
+                      <div class="ctx">
+                        <div class="ctx-bar" [class.warn]="pct >= 80" [class.full]="m.contextExhausted"
+                             [attr.aria-label]="'Contexto ' + pct + '%'"><span [style.width.%]="pct"></span></div>
+                        <span class="mono small">~{{ (m.contextPeakTokens ?? 0) | compact }} / {{ (m.contextBudgetTokens ?? 0) | compact }}</span>
+                        @if (m.contextExhausted) { <span class="badge tone-danger">esgotado</span> }
+                      </div>
+                    </td>
+                    <td class="num mono">{{ m.maxOutputTokens | compact }}</td>
+                    <td>
+                      <span class="badge" [class.tone-danger]="m.stopReason === 'max_tokens'" [class.tone-success]="m.stopReason !== 'max_tokens'">
+                        {{ m.stopReason ?? '—' }}
+                      </span>
+                    </td>
+                    <td>
+                      @if (m.toolInputRejected) {
+                        <span class="badge tone-warning">{{ m.toolInputRejected }} argumento(s) recusado(s)</span>
+                      } @else { <span class="badge tone-success">ok</span> }
+                    </td>
+                    <td>
+                      @if (m.schemaViolations?.length) {
+                        <span class="badge tone-warning" [title]="m.schemaViolations!.join('\n')">{{ m.schemaViolations!.length }} divergência(s)</span>
+                      } @else { <span class="badge tone-success">ok</span> }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </article>
+      }
+    } @else {
+      <div class="alert alert-info"><app-icon name="info" />
+        <div>Métricas por agente indisponíveis neste relatório (gerado antes desta versão do AgentHub).
+          Status: @for (e of meta()?.agents | keyvalue; track e.key) { <span class="mono">{{ e.key }}={{ e.value }} </span> }</div>
+      </div>
+    }
+  </section>
+}
+
+@if (remediating(); as f) {
+  <app-remediation-panel [finding]="f" (closed)="remediating.set(null)" />
+}

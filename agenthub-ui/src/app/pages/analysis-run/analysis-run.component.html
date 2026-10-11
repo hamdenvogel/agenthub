@@ -1,0 +1,129 @@
+@let r = run();
+<div class="page">
+  @if (notFound()) {
+    <div class="empty-state big">
+      <app-icon name="search" [size]="32" />
+      <h2>Análise não encontrada</h2>
+      <p>O backend guarda as execuções em memória; se ele foi reiniciado, abra o relatório gravado pelo histórico.</p>
+      <div class="actions">
+        <a routerLink="/history" class="btn"><app-icon name="history" [size]="16" /> Histórico</a>
+        <a routerLink="/" class="btn btn-primary"><app-icon name="sparkles" [size]="16" /> Nova análise</a>
+      </div>
+    </div>
+  } @else if (r) {
+    <header class="run-head no-print">
+      <div class="run-title">
+        <div class="run-meta">
+          <app-status-badge [status]="r.status" />
+          <span class="muted small mono">{{ r.analysisId.slice(0, 8) }}</span>
+          <span class="muted small">· iniciada {{ r.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }}</span>
+          @for (a of r.requestedAgents ?? []; track a) { <app-agent-chip [agent]="a" /> }
+        </div>
+        <h1>{{ r.request }}</h1>
+        @if (r.projectName) {
+          <div class="run-project" [title]="r.projectRoot ?? ''">
+            <app-icon name="crosshair" [size]="14" />
+            <strong>{{ r.projectName }}</strong>
+            @for (inc of r.scope; track inc) { <span class="tag mono">{{ inc }}</span> } @empty { <span class="muted small">projeto inteiro</span> }
+          </div>
+        }
+      </div>
+      <div class="run-actions">
+        <div class="timer" [class.live]="!finished()">
+          <app-icon name="clock" [size]="16" />
+          <span>{{ elapsedMs() | duration }}</span>
+        </div>
+        @if (!finished()) {
+          <button type="button" class="btn btn-danger" (click)="cancel()"><app-icon name="stop" [size]="16" /> Cancelar</button>
+        } @else {
+          <button type="button" class="btn" (click)="rerun()"><app-icon name="refresh" [size]="16" /> Executar novamente</button>
+        }
+      </div>
+    </header>
+
+    @if (!report()) {
+      <section class="card progress no-print">
+        <ol class="stepper">
+          @for (p of phaseState(); track p.key) {
+            <li [class]="p.state">
+              <span class="step-dot">
+                @switch (p.state) {
+                  @case ('done') { <app-icon name="check-circle" [size]="16" /> }
+                  @case ('current') { <span class="spinner"></span> }
+                  @case ('stopped') { <app-icon name="alert" [size]="14" /> }
+                  @default { <span class="dot"></span> }
+                }
+              </span>
+              <span class="step-label">{{ p.label }}</span>
+            </li>
+          }
+        </ol>
+
+        @if (liveAgents().length) {
+          <div class="live-agents">
+            @for (a of liveAgents(); track a.meta.id) {
+              <div class="live-agent" [style.--c]="a.meta.color" [class.running]="a.status === 'running'">
+                <span class="live-icon"><app-icon [name]="a.meta.icon" /></span>
+                <span class="live-name">{{ a.meta.label }}</span>
+                @if (a.status === 'running') {
+                  <span class="badge tone-info"><span class="pulse-dot"></span> analisando</span>
+                } @else {
+                  <app-status-badge [status]="a.status" />
+                }
+              </div>
+            }
+          </div>
+        }
+
+        @if (r.status === 'FAILED') {
+          <div class="alert alert-danger"><app-icon name="alert" /><div><strong>A análise falhou.</strong> {{ r.error }}</div></div>
+        }
+        @if (r.status === 'CANCELLED') {
+          <div class="alert alert-warning"><app-icon name="alert" /><div>Análise cancelada.</div></div>
+        }
+        @if (!finished()) {
+          <p class="muted small wait-hint">
+            <app-icon name="info" [size]="14" />
+            Cada agente investiga o projeto com ferramentas (filesystem, git) e o Claude; análises completas levam alguns minutos.
+            Você pode sair desta página: a execução continua no backend.
+          </p>
+        }
+      </section>
+    }
+
+    @if (error()) {
+      <div class="alert alert-danger no-print"><app-icon name="alert" /><div>{{ error() }}</div></div>
+    }
+
+    @if (report(); as rep) {
+      <app-report-viewer [report]="rep" [markdown]="markdown" />
+    } @else if (r.status === 'COMPLETED') {
+      <div class="skeleton" style="height: 320px"></div>
+    }
+
+    @if (r.events.length) {
+      <section class="card log no-print">
+        <button type="button" class="log-toggle" (click)="showLog.set(!showLog())" [attr.aria-expanded]="showLog()">
+          <h3 class="card-title"><app-icon name="activity" /> Linha do tempo ({{ r.events.length }} eventos)</h3>
+          <app-icon [name]="showLog() ? 'chevron-down' : 'chevron-right'" />
+        </button>
+        @if (showLog()) {
+          <ol class="events">
+            @for (e of r.events; track $index) {
+              <li>
+                <span class="mono muted">{{ offset(e.at) }}</span>
+                <span class="phase-tag">{{ e.phase }}</span>
+                <span>{{ e.message }}</span>
+              </li>
+            }
+          </ol>
+        }
+      </section>
+    }
+  } @else if (error()) {
+    <div class="alert alert-danger"><app-icon name="alert" /><div>{{ error() }}</div></div>
+  } @else {
+    <div class="skeleton" style="height: 90px; margin-bottom: 16px"></div>
+    <div class="skeleton" style="height: 240px"></div>
+  }
+</div>

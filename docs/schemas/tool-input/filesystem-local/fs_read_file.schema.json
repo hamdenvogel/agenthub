@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Caminho relativo à raiz do projeto."
+    },
+    "startLine": {
+      "type": "integer",
+      "description": "Primeira linha (1-based). Default 1."
+    },
+    "maxLines": {
+      "type": "integer",
+      "description": "Quantidade de linhas (máx. 400). Default 400."
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "additionalProperties": false
+}

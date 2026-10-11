@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "confidence": {
+      "type": "number",
+      "format": "double"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "excerpt": {
+                  "type": "string"
+                },
+                "file": {
+                  "type": "string"
+                },
+                "lines": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "excerpt",
+                "file",
+                "lines"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "CRITICAL",
+              "HIGH",
+              "MEDIUM",
+              "LOW",
+              "INFO"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "description",
+          "evidence",
+          "recommendation",
+          "severity",
+          "title"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "confidence",
+    "findings",
+    "recommendations",
+    "summary"
+  ],
+  "additionalProperties": false
+}

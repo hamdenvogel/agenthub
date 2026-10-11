@@ -1,0 +1,157 @@
+@let f = finding();
+@let p = proposal();
+@let c = consent();
+
+<div class="modal-backdrop" (click)="closed.emit()" (keydown.escape)="closed.emit()">
+  <div class="modal remediation" role="dialog" aria-modal="true" aria-label="Corrigir achado" (click)="$event.stopPropagation()">
+    <header class="modal-head">
+      <app-icon name="wand" />
+      <h2>Corrigir com IA</h2>
+      @if (p) { <app-remediation-badge [status]="p.status" /> }
+      <button type="button" class="btn btn-ghost icon-btn" (click)="closed.emit()" aria-label="Fechar"><app-icon name="x" /></button>
+    </header>
+
+    <div class="modal-body">
+      <div class="finding-line">
+        <app-severity-badge [severity]="f.severity" />
+        <span class="mono muted">{{ f.id }}</span>
+        <strong>{{ f.title }}</strong>
+      </div>
+
+      @if (!c) {
+        <div class="center muted"><span class="spinner"></span> Carregando…</div>
+      } @else if (!c.enabled) {
+        <div class="alert alert-info"><app-icon name="info" />
+          <span>A correção assistida está desabilitada no backend (<code>agenthub.remediation.enabled=false</code>).</span></div>
+      } @else if (!c.accepted) {
+        <!-- ===== Termos (consentimento prévio) ===== -->
+        <section class="terms">
+          <div class="alert alert-warning">
+            <app-icon name="lock" />
+            <div>
+              <strong>Antes de continuar: a IA vai poder alterar o código de "{{ c.projectName }}".</strong>
+              <p class="muted small">Leia e concorde com os termos abaixo. O aceite vale só para este projeto e pode ser revogado.</p>
+            </div>
+          </div>
+          <ol class="terms-list">
+            @for (t of c.terms; track $index) { <li>{{ t }}</li> }
+          </ol>
+          <label class="check">
+            <input type="checkbox" [checked]="agreed()" (change)="agreed.set(!agreed())" />
+            <span>Li e concordo que o AgentHub altere os arquivos de <code>{{ c.projectRoot }}</code>, uma correção por vez e só após a minha revisão.</span>
+          </label>
+        </section>
+      } @else if (!p || p.status === 'FAILED' || p.status === 'REVERTED') {
+        <!-- ===== Pedir correção ===== -->
+        @if (p?.status === 'FAILED') {
+          <div class="alert alert-danger"><app-icon name="alert" />
+            <div><strong>A última tentativa falhou</strong><p class="small">{{ p?.error }}</p></div></div>
+        }
+        @if (p?.status === 'REVERTED') {
+          <div class="alert alert-info"><app-icon name="undo" /><span>A correção anterior foi desfeita e os arquivos originais foram restaurados.</span></div>
+        }
+        @if (f.recommendation) {
+          <div class="recommendation"><app-icon name="check-circle" [size]="16" />
+            <div><h4>Recomendação da análise</h4><p class="prose small">{{ f.recommendation }}</p></div></div>
+        }
+        <ul class="how muted small">
+          <li>O agente de remediação lê os arquivos do projeto (somente leitura, segredos mascarados) e propõe um diff.</li>
+          <li>Você revisa cada arquivo alterado antes de qualquer gravação.</li>
+          <li>Ao aplicar, os originais ficam guardados e a correção pode ser desfeita.</li>
+        </ul>
+      } @else if (p.status === 'GENERATING') {
+        <div class="generating">
+          <span class="spinner"></span>
+          <div>
+            <strong>Gerando a correção…</strong>
+            <p class="muted small">O Claude está lendo os arquivos envolvidos e montando as alterações. Isso costuma levar de 30 s a 2 min; pode fechar esta janela que o status aparece na lista de achados.</p>
+          </div>
+        </div>
+      } @else {
+        <!-- ===== Proposta (READY / MANUAL_ONLY / APPLIED) ===== -->
+        @if (p.status === 'APPLIED') {
+          <div class="alert alert-success"><app-icon name="check-circle" />
+            <div><strong>Correção gravada no projeto.</strong>
+              <p class="small">Compile, rode os testes e revise o resultado antes do commit. Se algo der errado, use "Desfazer".</p></div></div>
+        }
+        @if (p.summary) { <p class="prose summary">{{ p.summary }}</p> }
+        <div class="meta-line muted small">
+          <span title="Confiança do agente">Confiança <strong>{{ pct(p.confidence) }}%</strong></span>
+          @if (p.files.length) {
+            <span>{{ p.files.length }} arquivo(s) · <span class="add">+{{ totals().additions }}</span> <span class="del">−{{ totals().deletions }}</span></span>
+          }
+          @if (p.model) { <span class="mono">{{ p.model }}</span> }
+        </div>
+
+        @for (file of p.files; track file.path) {
+          <article class="file">
+            <button type="button" class="file-head" (click)="toggleFile(file.path)" [attr.aria-expanded]="!collapsed().has(file.path)">
+              <app-icon [name]="collapsed().has(file.path) ? 'chevron-right' : 'chevron-down'" [size]="15" />
+              <code class="file-path">{{ file.path }}</code>
+              @if (file.created) { <span class="tag">novo</span> }
+              <span class="add small">+{{ file.additions }}</span><span class="del small">−{{ file.deletions }}</span>
+            </button>
+            @if (!collapsed().has(file.path)) {
+              @if (file.explanation) { <p class="muted small explanation">{{ file.explanation }}</p> }
+              <pre class="diff">@for (l of diffLines(file); track $index) {<span class="dl {{ l.kind }}">{{ l.text || ' ' }}</span>}</pre>
+            }
+          </article>
+        }
+
+        @if (p.manualSteps.length) {
+          <div class="alert alert-warning"><app-icon name="wrench" />
+            <div><strong>Passos manuais (não executados pelo AgentHub)</strong>
+              <ul>@for (s of p.manualSteps; track $index) { <li>{{ s }}</li> }</ul></div></div>
+        }
+        @if (p.risks.length) {
+          <div class="alert alert-info"><app-icon name="alert" />
+            <div><strong>Riscos e o que testar</strong>
+              <ul>@for (r of p.risks; track $index) { <li>{{ r }}</li> }</ul></div></div>
+        }
+        @if (p.status === 'READY') {
+          <label class="check">
+            <input type="checkbox" [checked]="reviewed()" (change)="reviewed.set(!reviewed())" />
+            <span>Revisei as alterações acima e autorizo gravá-las em <code>{{ p.projectRoot }}</code>.</span>
+          </label>
+        }
+      }
+    </div>
+
+    <footer class="modal-foot">
+      @if (c?.accepted) {
+        <button type="button" class="btn btn-ghost btn-sm revoke" (click)="revoke()" [disabled]="busy()" title="As próximas correções voltarão a pedir o aceite">
+          Revogar consentimento
+        </button>
+      }
+      <span class="spacer"></span>
+      @if (busy()) { <span class="spinner small-spinner"></span> }
+
+      @if (c && c.enabled && !c.accepted) {
+        <button type="button" class="btn" (click)="closed.emit()">Agora não</button>
+        <button type="button" class="btn btn-primary" (click)="accept()" [disabled]="!agreed() || busy()">
+          <app-icon name="check" [size]="16" /> Concordar e continuar
+        </button>
+      } @else if (c?.accepted) {
+        @if (!p || p.status === 'FAILED' || p.status === 'REVERTED') {
+          <button type="button" class="btn" (click)="closed.emit()">Fechar</button>
+          <button type="button" class="btn btn-primary" (click)="generate()" [disabled]="busy()">
+            <app-icon name="wand" [size]="16" /> {{ p ? 'Gerar nova correção' : 'Gerar correção' }}
+          </button>
+        } @else if (p.status === 'GENERATING') {
+          <button type="button" class="btn" (click)="closed.emit()">Fechar</button>
+        } @else if (p.status === 'READY') {
+          <button type="button" class="btn btn-danger" (click)="discard()" [disabled]="busy()"><app-icon name="trash" [size]="15" /> Descartar</button>
+          <button type="button" class="btn btn-primary" (click)="apply()" [disabled]="!reviewed() || busy()">
+            <app-icon name="check" [size]="16" /> Aplicar no projeto
+          </button>
+        } @else if (p.status === 'MANUAL_ONLY') {
+          <button type="button" class="btn" (click)="discard()" [disabled]="busy()">Descartar e gerar de novo</button>
+          <button type="button" class="btn btn-primary" (click)="closed.emit()">Entendi</button>
+        } @else if (p.status === 'APPLIED') {
+          <button type="button" class="btn" (click)="revert()" [disabled]="busy()"><app-icon name="undo" [size]="15" /> Desfazer</button>
+          <button type="button" class="btn btn-primary" (click)="closed.emit()">Concluir</button>
+        }
+      }
+    </footer>
+  </div>
+</div>

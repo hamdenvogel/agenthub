@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string"
+    },
+    "tail": {
+      "description": "If provided, returns only the last N lines of the file",
+      "type": "number"
+    },
+    "head": {
+      "description": "If provided, returns only the first N lines of the file",
+      "type": "number"
+    }
+  },
+  "required": [
+    "path"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "codeQuality": {
+      "type": "string"
+    },
+    "executiveSummary": {
+      "type": "string"
+    },
+    "keyRecommendations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "roadmap": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "CRITICAL",
+              "HIGH",
+              "MEDIUM",
+              "LOW",
+              "INFO"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "relatedFindings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "action",
+          "phase",
+          "priority",
+          "rationale",
+          "relatedFindings"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "codeQuality",
+    "executiveSummary",
+    "keyRecommendations",
+    "roadmap"
+  ],
+  "additionalProperties": false
+}

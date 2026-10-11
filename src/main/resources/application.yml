@@ -1,0 +1,189 @@
+spring:
+  application:
+    name: agenthub
+  threads:
+    virtual:
+      enabled: true
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      timeout: ${ANTHROPIC_TIMEOUT:PT3M}
+      max-retries: 2
+      chat:
+        model: ${ANTHROPIC_MODEL:claude-sonnet-4-5}
+        max-tokens: ${ANTHROPIC_MAX_TOKENS:8192}
+        temperature: 0.1
+    mcp:
+      client:
+        # Spring AI e o MCP Host: cria um MCP Client por conexao declarada abaixo.
+        enabled: ${AGENTHUB_MCP_ENABLED:true}
+        name: agenthub
+        version: 0.1.0
+        type: SYNC
+        # Inicializacao sob demanda (McpConnectionTools): servidor MCP fora do ar nao derruba a aplicacao.
+        initialized: false
+        request-timeout: 60s
+        # Nao expor todas as ferramentas MCP num provider global: o acesso e por agente (McpToolRegistry).
+        toolcallback:
+          enabled: false
+        stdio:
+          connections:
+            # Servidor MCP oficial de Git (Python, via uvx). Somente leitura por allowlist em agenthub.tool-sources.git.
+            # Sem --repository: o projeto muda em tempo de execucao; o repo_path de cada chamada e validado
+            # contra o projeto ativo (agenthub.tool-sources.git.path-arguments).
+            git:
+              command: ${AGENTHUB_UVX_COMMAND:uvx}
+              args:
+                - mcp-server-git
+            # Servidor MCP oficial de filesystem (Node 18+, via npx; versao fixada). Sem pasta nos argumentos:
+            # a raiz do projeto ativo e informada via MCP Roots (agenthub.tool-sources.filesystem.bind-to-workspace).
+            filesystem:
+              command: ${AGENTHUB_NPX_COMMAND:npx.cmd}
+              args:
+                - -y
+                - "@modelcontextprotocol/server-filesystem@${AGENTHUB_FILESYSTEM_MCP_VERSION:2026.8.31}"
+server:
+  port: ${SERVER_PORT:8090}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    level: "%5p [%X{analysisId:-}] [%X{agent:-}]"
+  level:
+    br.com.hvogel.agenthub: INFO
+    io.modelcontextprotocol: WARN
+
+agenthub:
+  target-project:
+    # Projeto inicial (somente leitura), usado so na primeira execucao para criar data/targets.json.
+    # Depois disso o projeto ativo e escolhido na tela Projetos. Relativo ao diretorio de execucao.
+    root: ${AGENTHUB_TARGET_ROOT:../clientes}
+    name: ${AGENTHUB_TARGET_NAME:clientes}
+    max-file-bytes: 200000
+
+  mcp:
+    # Espera pelo initialize de cada servidor MCP (SDK usa 20s; uvx/npx no Windows costumam passar disso).
+    initialization-timeout: ${AGENTHUB_MCP_INIT_TIMEOUT:PT90S}
+
+  project-database:
+    # Postgres MCP Pro (Python, via uvx; versao fixada) ligado ao banco do projeto ativo. A URI de cada projeto
+    # fica em data/targets.json (tela Projetos) e chega ao servidor pela variavel DATABASE_URI; o processo e
+    # recriado quando o projeto ou a URI mudam. --access-mode=restricted: transacao read-only e SQL validado
+    # pelo servidor. mcp<2: o postgres-mcp 0.3.0 nao roda com o SDK MCP 2.x.
+    connection: postgres
+    command: ${AGENTHUB_UVX_COMMAND:uvx}
+    args:
+      - --with
+      - mcp<2
+      - postgres-mcp==${AGENTHUB_POSTGRES_MCP_VERSION:0.3.0}
+      - --access-mode=restricted
+    uri-variable: DATABASE_URI
+    initialization-timeout: ${AGENTHUB_MCP_INIT_TIMEOUT:PT90S}
+    request-timeout: PT60S
+
+  targets:
+    # Projetos cadastrados pela UI e projeto ativo (JSON). Guarda a URI do banco de cada projeto, com senha:
+    # o arquivo fica fora do git e a API so devolve a URI mascarada.
+    store-file: ${AGENTHUB_TARGETS_FILE:data/targets.json}
+    # Pastas-base onde os projetos podem ficar (separadas por virgula).
+    allowed-roots: ${AGENTHUB_ALLOWED_ROOTS:C:/Hamden/Sistemas}
+
+  remediation:
+    # Correção assistida: so grava no projeto com consentimento por projeto + aprovação de cada diff.
+    enabled: ${AGENTHUB_REMEDIATION_ENABLED:true}
+    # Propostas, backups dos originais (podem conter segredos) e consentimentos. Fora do projeto analisado.
+    store-dir: ${AGENTHUB_REMEDIATION_DIR:data/remediations}
+    max-tool-calls: 25
+    max-files: 8
+
+  # Limites de cada chamada ao Claude:
+  #   context window ("quanto cabe")      -> prompts + tool schemas + resultados de ferramentas
+  #   max_tokens     ("quanto pode responder") -> teto da resposta (o JSON final precisa caber aqui)
+  # Agentes podem sobrescrever em agenthub.agents.<id>.max-output-tokens / context-budget-tokens.
+  claude:
+    context-window: ${ANTHROPIC_CONTEXT_WINDOW:200000}
+    max-output-tokens: ${ANTHROPIC_MAX_TOKENS:8192}
+    context-budget-tokens: ${AGENTHUB_CONTEXT_BUDGET:120000}
+
+  orchestrator:
+    max-iterations: 2            # rodada inicial + 1 rodada de re-delegacao
+    analysis-timeout: PT30M
+    agent-timeout: PT8M
+    max-attempts: 2              # retry por execucao de agente
+    retry-backoff: PT5S
+    max-parallel-agents: 3       # global; protege o rate limit da API Anthropic
+    min-confidence: 0.5
+    max-follow-ups-per-agent: 1
+
+  planner:
+    mode: llm                    # llm | rules
+
+  reports:
+    enabled: true
+    output-dir: reports
+
+  # Least privilege: cada agente so recebe as fontes listadas aqui.
+  # filesystem (MCP oficial: listar/ler) + code-search (local: busca por conteudo, com arquivo:linha).
+  # Sem Node/npx, troque "filesystem, code-search" por "filesystem-local" (as 4 ferramentas in-process).
+  agents:
+    architecture:
+      tool-sources: [filesystem, code-search, git, sonarqube]
+      max-tool-calls: 30
+    backend:
+      tool-sources: [filesystem, code-search, git, sonarqube]
+      max-tool-calls: 30
+    frontend:
+      tool-sources: [filesystem, code-search, git, sonarqube]
+      max-tool-calls: 30
+    database:
+      tool-sources: [filesystem, code-search, git, database]
+      max-tool-calls: 25
+    security:
+      tool-sources: [filesystem, code-search, git, sonarqube]
+      max-tool-calls: 30
+    test:
+      tool-sources: [filesystem, code-search, git]
+      max-tool-calls: 25
+
+  tool-sources:
+    filesystem:
+      type: mcp
+      connection: filesystem
+      # Somente leitura: escrita (write_file, edit_file, move_file, create_directory) fica fora da allowlist e
+      # tambem e barrada pelo filtro de escrita. directory_tree fica de fora: num projeto com node_modules
+      # devolve uma arvore enorme e consome a context window.
+      allowed-tools: [list_directory, read_text_file, read_multiple_files, search_files, get_file_info]
+      path-arguments: [path, paths]
+      # Raiz via MCP Roots + cada caminho resolvido pelas regras do workspace (escopo, exclusoes, .env/chaves).
+      bind-to-workspace: true
+      description: Servidor MCP oficial de filesystem (listar, ler e buscar arquivos por nome; somente leitura, preso ao projeto ativo).
+    code-search:
+      type: local
+      description: Busca de texto/regex no conteudo dos arquivos (fs_search_text, in-process), com arquivo:linha e segredos mascarados.
+    filesystem-local:
+      type: local
+      description: Reserva in-process (fs_list_directory, fs_read_file, fs_search_text, fs_find_files) para uso sem Node/npx.
+    git:
+      type: mcp
+      connection: git
+      allowed-tools: [git_status, git_log, git_show, git_diff, git_diff_unstaged, git_diff_staged, git_branch]
+      path-arguments: [repo_path]
+      description: Servidor MCP oficial mcp-server-git (historico, commits, branches, diffs).
+    database:
+      enabled: ${AGENTHUB_DATABASE_ENABLED:true}
+      type: mcp
+      connection: postgres
+      # Metadados, planos e diagnostico. execute_sql fica de fora (SQL livre; tambem barrado pelo filtro de escrita).
+      allowed-tools: [list_schemas, list_objects, get_object_details, explain_query, analyze_db_health,
+                      analyze_query_indexes, analyze_workload_indexes, get_top_queries]
+      description: PostgreSQL do projeto via Postgres MCP Pro em modo restrito (schemas, tabelas, colunas, indices, EXPLAIN, saude e sugestao de indices; somente leitura).
+    sonarqube:
+      enabled: false
+      type: mcp
+      connection: sonarqube
+      description: SonarQube via MCP (ex. imagem Docker mcp/sonarqube com SONARQUBE_TOKEN). Nao configurado.
